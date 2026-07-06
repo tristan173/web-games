@@ -66,10 +66,14 @@
 
   /* ---------- floor banner ---------- */
   #banner{position:fixed;top:38%;left:0;right:0;text-align:center;pointer-events:none;
-    font-weight:200;font-size:clamp(22px,4.5vw,34px);letter-spacing:.5em;
-    color:var(--bone);opacity:0;transition:opacity .5s;text-transform:uppercase;
-    text-shadow:0 0 20px rgba(127,227,255,.3)}
+    opacity:0;transition:opacity .5s}
   #banner.show{opacity:.9}
+  #bannertitle{font-weight:200;font-size:clamp(22px,4.5vw,34px);letter-spacing:.5em;
+    color:var(--bone);text-transform:uppercase;text-shadow:0 0 20px rgba(127,227,255,.3)}
+  #bannersub{margin-top:12px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint)}
+  #bannersub b{color:var(--bone);font-weight:600;letter-spacing:.06em}
+  #bannersub .rec{color:var(--ember);text-shadow:0 0 14px rgba(255,179,92,.5)}
 
   /* ---------- buttons ---------- */
   #mute{position:fixed;right:16px;bottom:14px;width:38px;height:38px;line-height:36px;
@@ -91,6 +95,7 @@
     <div class="stat">Depth <b id="floorlbl">—</b></div>
     <div class="stat">Pings<div id="pingdots"></div></div>
     <div class="stat">Air<div id="airwrap"><div id="airbar"></div></div></div>
+    <div class="stat">Time <b id="timelbl">0:00</b></div>
   </div>
   <div class="hudcol right">
     <div class="stat">Score <b id="scorelbl">0</b></div>
@@ -98,7 +103,7 @@
   </div>
 </div>
 
-<div id="banner"></div>
+<div id="banner"><div id="bannertitle"></div><div id="bannersub"></div></div>
 
 <div id="title" class="overlay">
   <h1>PING</h1>
@@ -137,13 +142,16 @@ const TUNE = {
   ringMax: 560,        // sonar reach px
   exitRingMax: 480,    // gate pulse reach
   exitPulseEvery: 4.5, // s between gate pulses
+  bannerHold: 4,       // s the depth-clear banner stays up before the next floor loads
   glowDecay: 0.16,     // per s (≈6 s afterglow)
   airMax: 90,          // s per floor
-  shardAir: 8,         // s restored per shard
+  shardAirTotal: 45,   // s of bonus air obtainable from ALL shards on a floor, combined —
+                       // normalized so a bigger floor's extra shards don't erase the timer
   ambientR: 82,        // px of touch-light around you
+  shardGrabR: 20,      // px — how close you need to be to grab a discovered shard
 };
-const budgetFor = f => Math.max(6, 9 - Math.floor((f - 1) * 0.7));
-const shardsFor = f => 10 + Math.min(4, f - 1);
+const budgetFor = f => 9;  // flat — deeper floors get a bigger maze, not a shrinking light budget
+const shardsFor = (c, r) => Math.max(8, Math.round(c * r / 280));  // constant density as the cave grows
 const sizeFor   = f => [Math.min(120, 64 + (f - 1) * 12), Math.min(76, 44 + (f - 1) * 8)];
 
 /* ===GEN=== pure cave generation (headless-testable) */
@@ -264,6 +272,7 @@ let floor = 1, score = 0, shardsGot = 0, sessionBest = 0;
 let cave = null, COLS=0, ROWS=0;
 let glowC = null, glowA = null; // cyan / amber afterglow per wall cell
 let shardList = [];             // {x,y,discovered,taken,phase}
+let shardAirEach = 0;            // this floor's share of TUNE.shardAirTotal
 let exitPos = {x:0,y:0}, exitDiscovered = false, exitTimer = 1.2;
 let rings = [];                 // {x,y,r,prevR,max,hue:'c'|'a'}
 let player = {x:0,y:0,vx:0,vy:0,px:0,py:0};
@@ -272,6 +281,20 @@ let cam = {x:0,y:0};
 let pings = 0, air = TUNE.airMax;
 let keys = {}, pointer = {down:false, sx:0, sy:0, t:0, moved:0};
 let lastBump = 0, paused = false;
+let floorTime = 0;               // seconds elapsed on the current floor
+let clearTimer = null;           // pending auto-advance timeout while state === 'clear'
+let clearReadyAt = 0;            // performance.now() threshold before a manual skip is honored
+
+const store = {
+  get(k,d){ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } },
+  set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} },
+};
+let bestFloorTime = parseFloat(store.get('ping.bestFloorTime','')) || null;
+function fmtTime(s){
+  s = Math.max(0, s);
+  const m = Math.floor(s/60), sec = Math.floor(s%60);
+  return m + ':' + (sec<10?'0':'') + sec;
+}
 
 /* ============================================================
    audio — tiny synth, built on first gesture
@@ -316,7 +339,7 @@ function newFloor(f){
   const [c, r] = sizeFor(f);
   let g = null, tries = 0;
   while (!g && tries++ < 40)
-    g = genCave(c, r, mulberry32((Math.random()*2**31)|0), shardsFor(f));
+    g = genCave(c, r, mulberry32((Math.random()*2**31)|0), shardsFor(c, r));
   cave = g; COLS = g.cols; ROWS = g.rows;
   glowC = new Float32Array(COLS*ROWS);
   glowA = new Float32Array(COLS*ROWS);
@@ -326,10 +349,23 @@ function newFloor(f){
   exitPos = {x: cx(g.exit), y: cy(g.exit)};
   exitDiscovered = false; exitTimer = 1.0;
   shardList = g.shards.map(i => ({x:cx(i), y:cy(i), discovered:false, taken:false, phase:Math.random()*7}));
+  shardAirEach = TUNE.shardAirTotal / Math.max(1, shardList.length);
   rings = []; trail = [];
   cam.x = player.x; cam.y = player.y;
   pings = budgetFor(f); air = TUNE.airMax;
+  floorTime = 0;
   hudPings(); hudStatic();
+}
+
+function advanceFloor(){
+  if (state !== 'clear') return;   // already advanced (input beat the timer, or vice versa)
+  clearTimeout(clearTimer); clearTimer = null;
+  $('banner').classList.remove('show');
+  floor++; newFloor(floor); state = 'play';
+}
+function skipBanner(){             // a deliberate tap, not residual input from reaching the gate
+  if (state !== 'clear' || performance.now() < clearReadyAt) return;
+  advanceFloor();
 }
 
 function startRun(){
@@ -350,6 +386,7 @@ addEventListener('keydown', e => {
   if (e.code === 'Space'){
     if (state === 'title') { audioInit(); startRun(); }
     else if (state === 'over') startRun();
+    else if (state === 'clear') skipBanner();
     else if (state === 'play' && !paused) firePing();
   }
   if (e.code === 'KeyR' && state === 'over') startRun();
@@ -372,6 +409,7 @@ addEventListener('pointerup', () => {
   const quick = performance.now() - pointer.t < 230 && pointer.moved < 12;
   if (state === 'title')      startRun();
   else if (state === 'over')  startRun();
+  else if (state === 'clear' && quick) skipBanner();   // a hold-release arriving at the gate isn't a skip
   else if (state === 'play' && !paused && quick) firePing();
 });
 document.getElementById('mute').addEventListener('pointerdown', e => {
@@ -379,7 +417,8 @@ document.getElementById('mute').addEventListener('pointerdown', e => {
 });
 document.getElementById('pingbtn').addEventListener('pointerdown', e => {
   e.stopPropagation(); e.preventDefault(); audioInit();
-  if (state==='play' && !paused) firePing();
+  if (state === 'clear') skipBanner();
+  else if (state==='play' && !paused) firePing();
 });
 addEventListener('contextmenu', e => e.preventDefault());
 document.addEventListener('visibilitychange', () => { if (document.hidden && state==='play') paused = true; });
@@ -400,6 +439,7 @@ function firePing(){
    simulation
    ============================================================ */
 function step(dt){
+  floorTime += dt;
   // --- swim ---
   let dx = (keys.KeyD||keys.ArrowRight?1:0) - (keys.KeyA||keys.ArrowLeft?1:0);
   let dy = (keys.KeyS||keys.ArrowDown?1:0)  - (keys.KeyW||keys.ArrowUp?1:0);
@@ -446,10 +486,10 @@ function step(dt){
 
   // --- shards ---
   for (const s of shardList){
-    if (s.taken) continue;
-    if (Math.hypot(s.x-player.x, s.y-player.y) < 16){
+    if (s.taken || !s.discovered) continue;
+    if (Math.hypot(s.x-player.x, s.y-player.y) < TUNE.shardGrabR){
       s.taken = true; shardsGot++; score += 50;
-      pings++; air = Math.min(99, air + TUNE.shardAir);
+      pings++; air = Math.min(99, air + shardAirEach);
       rings.push({x:s.x, y:s.y, r:2, prevR:0, max:110, hue:'c'});
       sShard(); hudPings(); hudStatic();
     }
@@ -457,11 +497,15 @@ function step(dt){
 
   // --- reach the gate ---
   if (Math.hypot(exitPos.x-player.x, exitPos.y-player.y) < CELL*0.8){
-    score += 200 + floor*50 + Math.round(air)*2;
+    const airBonus = Math.round(air) * 2;
+    score += 200 + floor*50 + airBonus;
+    const isRecord = bestFloorTime === null || floorTime < bestFloorTime;
+    if (isRecord){ bestFloorTime = floorTime; store.set('ping.bestFloorTime', ''+bestFloorTime); }
     sClear();
     state = 'clear';
-    banner('depth ' + (floor+1));
-    setTimeout(() => { floor++; newFloor(floor); state = 'play'; }, 1400);
+    clearReadyAt = performance.now() + 500;   // ignore residual input from arriving at the gate
+    floorBanner(floor+1, floorTime, airBonus, isRecord);
+    clearTimer = setTimeout(advanceFloor, TUNE.bannerHold * 1000);
   }
 
   // --- air ---
@@ -550,7 +594,8 @@ function gameOver(){
     'depth reached <b>' + floor + '</b><br>' +
     'shards <b>' + shardsGot + '</b><br>' +
     'score <b>' + score + '</b><br>' +
-    'session best <b>' + sessionBest + '</b>';
+    'session best <b>' + sessionBest + '</b>' +
+    (bestFloorTime !== null ? '<br>fastest floor <b>' + fmtTime(bestFloorTime) + '</b>' : '');
   show('over', true);
 }
 
@@ -682,12 +727,13 @@ function hudDyn(){
   $('airwrap').classList.toggle('low', air < 20);
   $('scorelbl').textContent = score;
   $('shardlbl').textContent = shardsGot;
+  $('timelbl').textContent = fmtTime(floorTime);
 }
-function banner(text){
-  const b = $('banner');
-  b.textContent = text;
-  b.classList.add('show');
-  setTimeout(() => b.classList.remove('show'), 1200);
+function floorBanner(nextDepth, floorSecs, airBonus, isRecord){
+  $('bannertitle').textContent = 'depth ' + nextDepth;
+  $('bannersub').innerHTML = 'time <b>' + fmtTime(floorSecs) + '</b> &nbsp;·&nbsp; air bonus <b>+' + airBonus + '</b>' +
+    (isRecord ? ' &nbsp;·&nbsp; <span class="rec">fastest floor</span>' : '');
+  $('banner').classList.add('show');
 }
 function show(id, on){ $(id).classList.toggle('hidden', !on); }
 
