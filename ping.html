@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>PING — a game of echolocation</title>
+<style>
+  :root{
+    --abyss:#050912;      /* deep water, not pure black */
+    --ink:#0a1322;
+    --sonar:#7fe3ff;      /* your voice: cold cyan */
+    --sonar-dim:#3d7d97;
+    --ember:#ffb35c;      /* the world's voice: warm amber */
+    --bone:#dfeef6;
+    --faint:#5d7686;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--abyss);
+    font-family:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+    color:var(--bone); -webkit-user-select:none;user-select:none;}
+  canvas{display:block;position:fixed;inset:0;touch-action:none}
+
+  /* ---------- HUD ---------- */
+  #hud{position:fixed;inset:0;pointer-events:none;padding:14px 18px;
+    display:flex;justify-content:space-between;align-items:flex-start;
+    font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .hudcol{display:flex;flex-direction:column;gap:10px}
+  .hudcol.right{align-items:flex-end;text-align:right}
+  .stat b{color:var(--bone);font-weight:600}
+  #pingdots{display:flex;gap:5px;margin-top:2px}
+  #pingdots i{width:8px;height:8px;border-radius:50%;background:var(--sonar);
+    box-shadow:0 0 6px var(--sonar);opacity:.95;transition:opacity .2s,transform .2s}
+  #pingdots i.spent{background:transparent;box-shadow:none;border:1px solid var(--sonar-dim);opacity:.4}
+  #airwrap{width:150px;height:6px;border:1px solid var(--sonar-dim);border-radius:3px;
+    margin-top:3px;overflow:hidden}
+  #airbar{height:100%;width:100%;background:var(--sonar);border-radius:2px;
+    transition:width .25s linear, background .4s}
+  #airwrap.low #airbar{background:var(--ember)}
+  @keyframes lowpulse{0%,100%{opacity:1}50%{opacity:.35}}
+  #airwrap.low{animation:lowpulse 1s infinite}
+  @media (prefers-reduced-motion:reduce){#airwrap.low{animation:none}}
+
+  /* ---------- overlays ---------- */
+  .overlay{position:fixed;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;
+    pointer-events:none;padding:24px;background:radial-gradient(ellipse at center,
+      rgba(5,9,18,.25) 0%, rgba(5,9,18,.82) 100%);transition:opacity .5s}
+  .overlay.hidden{opacity:0;visibility:hidden}
+  h1{font-weight:200;font-size:clamp(44px,9vw,84px);letter-spacing:.55em;
+    margin:0 0 6px .55em;color:var(--bone);text-shadow:0 0 26px rgba(127,227,255,.35)}
+  .sub{letter-spacing:.3em;text-transform:uppercase;font-size:11px;color:var(--sonar);
+    margin-bottom:36px}
+  .rules{font-size:12.5px;line-height:2.1;color:var(--faint);letter-spacing:.08em;max-width:420px}
+  .rules b{color:var(--bone);font-weight:600}
+  .rules .amber{color:var(--ember)}
+  .rules .cyan{color:var(--sonar)}
+  .cta{margin-top:34px;font-size:12px;letter-spacing:.28em;text-transform:uppercase;
+    color:var(--sonar);animation:breathe 2.6s ease-in-out infinite}
+  @keyframes breathe{0%,100%{opacity:.35}50%{opacity:1}}
+  @media (prefers-reduced-motion:reduce){.cta{animation:none;opacity:.85}}
+  #overstats{font-size:13px;letter-spacing:.18em;line-height:2.4;color:var(--faint);
+    text-transform:uppercase}
+  #overstats b{color:var(--bone)}
+  #overtitle{font-weight:200;font-size:clamp(26px,5vw,40px);letter-spacing:.4em;
+    margin:0 0 20px .4em;color:var(--ember)}
+
+  /* ---------- floor banner ---------- */
+  #banner{position:fixed;top:38%;left:0;right:0;text-align:center;pointer-events:none;
+    font-weight:200;font-size:clamp(22px,4.5vw,34px);letter-spacing:.5em;
+    color:var(--bone);opacity:0;transition:opacity .5s;text-transform:uppercase;
+    text-shadow:0 0 20px rgba(127,227,255,.3)}
+  #banner.show{opacity:.9}
+
+  /* ---------- buttons ---------- */
+  #mute{position:fixed;right:16px;bottom:14px;width:38px;height:38px;line-height:36px;
+    text-align:center;border:1px solid var(--sonar-dim);border-radius:50%;cursor:pointer;
+    color:var(--faint);font-size:15px;pointer-events:auto;background:rgba(5,9,18,.5)}
+  #mute:hover{color:var(--sonar);border-color:var(--sonar)}
+  #pingbtn{position:fixed;left:16px;bottom:14px;padding:12px 22px;border-radius:24px;
+    border:1px solid var(--sonar-dim);color:var(--sonar);letter-spacing:.3em;font-size:12px;
+    text-transform:uppercase;pointer-events:auto;cursor:pointer;background:rgba(5,9,18,.5);
+    display:none}
+  @media (pointer:coarse){#pingbtn{display:block}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud">
+  <div class="hudcol">
+    <div class="stat">Depth <b id="floorlbl">—</b></div>
+    <div class="stat">Pings<div id="pingdots"></div></div>
+    <div class="stat">Air<div id="airwrap"><div id="airbar"></div></div></div>
+  </div>
+  <div class="hudcol right">
+    <div class="stat">Score <b id="scorelbl">0</b></div>
+    <div class="stat">Shards <b id="shardlbl">0</b></div>
+  </div>
+</div>
+
+<div id="banner"></div>
+
+<div id="title" class="overlay">
+  <h1>PING</h1>
+  <div class="sub">a game of echolocation</div>
+  <div class="rules">
+    <b>hold</b> anywhere to swim toward it &nbsp;·&nbsp; or <b>WASD</b><br>
+    <b>click / space</b> to <span class="cyan">ping</span> — the dark answers<br>
+    find the <span class="amber">amber gate</span> before your air runs out<br>
+    <span class="cyan">shards</span> restore a ping and a breath
+  </div>
+  <div class="cta">click to dive</div>
+</div>
+
+<div id="over" class="overlay hidden">
+  <div id="overtitle">OUT OF AIR</div>
+  <div id="overstats"></div>
+  <div class="cta">click to dive again</div>
+</div>
+
+<div id="mute" title="mute (M)">♪</div>
+<div id="pingbtn">ping</div>
+
+<script>
+'use strict';
+/* ============================================================
+   PING — an echolocation game
+   Single file. No dependencies. No build step.
+   Tuning knobs live right here:
+   ============================================================ */
+const TUNE = {
+  cell: 26,            // px per cave cell
+  playerR: 7,          // collision radius
+  swimSpeed: 175,      // px/s
+  swimLerp: 8,         // how snappy steering feels
+  ringSpeed: 340,      // sonar wavefront px/s
+  ringMax: 560,        // sonar reach px
+  exitRingMax: 480,    // gate pulse reach
+  exitPulseEvery: 4.5, // s between gate pulses
+  glowDecay: 0.16,     // per s (≈6 s afterglow)
+  airMax: 90,          // s per floor
+  shardAir: 8,         // s restored per shard
+  ambientR: 82,        // px of touch-light around you
+};
+const budgetFor = f => Math.max(6, 9 - Math.floor((f - 1) * 0.7));
+const shardsFor = f => 10 + Math.min(4, f - 1);
+const sizeFor   = f => [Math.min(120, 64 + (f - 1) * 12), Math.min(76, 44 + (f - 1) * 8)];
+
+/* ===GEN=== pure cave generation (headless-testable) */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;
+  let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;
+  return((t^t>>>14)>>>0)/4294967296}}
+
+function genCave(cols, rows, rand, shardCount){
+  const N = cols * rows;
+  const idx = (x, y) => y * cols + x;
+  let map = new Uint8Array(N);
+
+  // seed noise + solid border
+  for (let y = 0; y < rows; y++)
+    for (let x = 0; x < cols; x++)
+      map[idx(x,y)] = (x===0||y===0||x===cols-1||y===rows-1||rand()<0.46) ? 1 : 0;
+
+  // smooth: cellular automata, 5 passes
+  for (let pass = 0; pass < 5; pass++){
+    const next = new Uint8Array(N);
+    for (let y = 0; y < rows; y++)
+      for (let x = 0; x < cols; x++){
+        let walls = 0;
+        for (let dy=-1; dy<=1; dy++) for (let dx=-1; dx<=1; dx++){
+          const nx=x+dx, ny=y+dy;
+          if (nx<0||ny<0||nx>=cols||ny>=rows || map[idx(nx,ny)]) walls++;
+        }
+        next[idx(x,y)] = walls >= 5 ? 1 : 0;
+      }
+    map = next;
+  }
+
+  // keep only the largest open region
+  const region = new Int32Array(N).fill(-1);
+  const q = new Int32Array(N);
+  let bestId = -1, bestSize = 0, rid = 0;
+  for (let s = 0; s < N; s++){
+    if (map[s] || region[s] !== -1) continue;
+    let head=0, tail=0, size=0;
+    q[tail++]=s; region[s]=rid;
+    while (head<tail){
+      const c=q[head++]; size++;
+      const cx=c%cols, cy=(c/cols)|0;
+      if(cx>0     && !map[c-1]    && region[c-1]===-1)   {region[c-1]=rid;    q[tail++]=c-1;}
+      if(cx<cols-1&& !map[c+1]    && region[c+1]===-1)   {region[c+1]=rid;    q[tail++]=c+1;}
+      if(cy>0     && !map[c-cols] && region[c-cols]===-1){region[c-cols]=rid; q[tail++]=c-cols;}
+      if(cy<rows-1&& !map[c+cols] && region[c+cols]===-1){region[c+cols]=rid; q[tail++]=c+cols;}
+    }
+    if (size > bestSize){ bestSize = size; bestId = rid; }
+    rid++;
+  }
+  if (bestSize < N * 0.28) return null;  // too choked — retry
+  const open = [];
+  for (let i = 0; i < N; i++){
+    if (!map[i] && region[i] !== bestId) map[i] = 1;
+    else if (!map[i]) open.push(i);
+  }
+
+  // BFS distances from a source
+  const bfs = (src) => {
+    const dist = new Int32Array(N).fill(-1);
+    let head=0, tail=0;
+    q[tail++]=src; dist[src]=0;
+    let far=src;
+    while (head<tail){
+      const c=q[head++];
+      const cx=c%cols, cy=(c/cols)|0, d=dist[c]+1;
+      if(cx>0     && !map[c-1]    && dist[c-1]===-1)   {dist[c-1]=d;    q[tail++]=c-1;    if(d>dist[far])far=c-1;}
+      if(cx<cols-1&& !map[c+1]    && dist[c+1]===-1)   {dist[c+1]=d;    q[tail++]=c+1;    if(d>dist[far])far=c+1;}
+      if(cy>0     && !map[c-cols] && dist[c-cols]===-1){dist[c-cols]=d; q[tail++]=c-cols; if(d>dist[far])far=c-cols;}
+      if(cy<rows-1&& !map[c+cols] && dist[c+cols]===-1){dist[c+cols]=d; q[tail++]=c+cols; if(d>dist[far])far=c+cols;}
+    }
+    return {dist, far};
+  };
+
+  // graph-diameter trick: start and exit are the two farthest-apart caverns
+  const seed = open[(rand()*open.length)|0];
+  const a = bfs(seed).far;
+  const {dist, far: b} = bfs(a);
+  const maxDist = dist[b];
+  if (maxDist < (cols + rows) * 0.5) return null;  // too easy — retry
+
+  // shards: mid-journey cells, spaced apart
+  const lo = maxDist*0.22, hi = maxDist*0.95;
+  const cand = open.filter(i => dist[i] >= lo && dist[i] <= hi && i!==a && i!==b);
+  for (let i = cand.length-1; i > 0; i--){          // shuffle
+    const j = (rand()*(i+1))|0; const t=cand[i]; cand[i]=cand[j]; cand[j]=t;
+  }
+  const shards = [];
+  for (const minGap of [9, 5, 2]){
+    for (const c of cand){
+      if (shards.length >= shardCount) break;
+      const cx=c%cols, cy=(c/cols)|0;
+      let ok = true;
+      for (const s of shards){
+        const sx=s%cols, sy=(s/cols)|0;
+        if (Math.abs(sx-cx)+Math.abs(sy-cy) < minGap){ ok=false; break; }
+      }
+      if (ok) shards.push(c);
+    }
+    if (shards.length >= shardCount) break;
+  }
+  return { map, cols, rows, start:a, exit:b, shards, maxDist };
+}
+/* ===ENDGEN=== */
+
+/* ============================================================
+   game state
+   ============================================================ */
+const CELL = TUNE.cell;
+const cvs = document.getElementById('c');
+const ctx = cvs.getContext('2d');
+let W=0, H=0, DPR=1;
+let vignette = null;
+
+let state = 'title';            // title | play | clear | over
+let floor = 1, score = 0, shardsGot = 0, sessionBest = 0;
+let cave = null, COLS=0, ROWS=0;
+let glowC = null, glowA = null; // cyan / amber afterglow per wall cell
+let shardList = [];             // {x,y,discovered,taken,phase}
+let exitPos = {x:0,y:0}, exitDiscovered = false, exitTimer = 1.2;
+let rings = [];                 // {x,y,r,prevR,max,hue:'c'|'a'}
+let player = {x:0,y:0,vx:0,vy:0,px:0,py:0};
+let trail = [];
+let cam = {x:0,y:0};
+let pings = 0, air = TUNE.airMax;
+let keys = {}, pointer = {down:false, sx:0, sy:0, t:0, moved:0};
+let lastBump = 0, paused = false;
+
+/* ============================================================
+   audio — tiny synth, built on first gesture
+   ============================================================ */
+let AC = null, master = null, echo = null, muted = false;
+function audioInit(){
+  if (AC) return;
+  try{
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    master = AC.createGain(); master.gain.value = 0.5; master.connect(AC.destination);
+    echo = AC.createDelay(1); echo.delayTime.value = 0.27;
+    const fb = AC.createGain(); fb.gain.value = 0.34;
+    const wet = AC.createGain(); wet.gain.value = 0.32;
+    echo.connect(fb); fb.connect(echo); echo.connect(wet); wet.connect(master);
+  }catch(e){ AC = null; }
+}
+function tone(f0, f1, dur, vol, type, useEcho){
+  if (!AC || muted) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type || 'sine';
+  const t = AC.currentTime;
+  o.frequency.setValueAtTime(f0, t);
+  o.frequency.exponentialRampToValueAtTime(Math.max(1,f1), t + dur);
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(master);
+  if (useEcho && echo) g.connect(echo);
+  o.start(t); o.stop(t + dur + 0.05);
+}
+const sPing  = () => tone(760, 300, 0.55, 0.30, 'sine', true);
+const sEmpty = () => tone(180, 140, 0.15, 0.10, 'sine', false);
+const sThud  = () => tone(95,  55,  0.12, 0.16, 'sine', false);
+const sGate  = (v)=> tone(196, 180, 0.7,  v,    'sine', true);
+const sShard = () => { tone(880,880,0.14,0.14,'sine',true); setTimeout(()=>tone(1318,1318,0.2,0.12,'sine',true), 70); };
+const sClear = () => { [392,523,659].forEach((f,i)=>setTimeout(()=>tone(f,f,0.35,0.16,'sine',true), i*130)); };
+const sOver  = () => { tone(220,60,1.4,0.2,'sine',true); };
+
+/* ============================================================
+   floor setup
+   ============================================================ */
+function newFloor(f){
+  const [c, r] = sizeFor(f);
+  let g = null, tries = 0;
+  while (!g && tries++ < 40)
+    g = genCave(c, r, mulberry32((Math.random()*2**31)|0), shardsFor(f));
+  cave = g; COLS = g.cols; ROWS = g.rows;
+  glowC = new Float32Array(COLS*ROWS);
+  glowA = new Float32Array(COLS*ROWS);
+  const cx = i => (i % COLS + 0.5) * CELL, cy = i => ((i / COLS | 0) + 0.5) * CELL;
+  player.x = player.px = cx(g.start); player.y = player.py = cy(g.start);
+  player.vx = player.vy = 0;
+  exitPos = {x: cx(g.exit), y: cy(g.exit)};
+  exitDiscovered = false; exitTimer = 1.0;
+  shardList = g.shards.map(i => ({x:cx(i), y:cy(i), discovered:false, taken:false, phase:Math.random()*7}));
+  rings = []; trail = [];
+  cam.x = player.x; cam.y = player.y;
+  pings = budgetFor(f); air = TUNE.airMax;
+  hudPings(); hudStatic();
+}
+
+function startRun(){
+  floor = 1; score = 0; shardsGot = 0;
+  newFloor(1);
+  state = 'play';
+  show('title', false); show('over', false);
+}
+
+/* ============================================================
+   input
+   ============================================================ */
+addEventListener('keydown', e => {
+  if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+  keys[e.code] = true;
+  if (e.code === 'KeyM') toggleMute();
+  if (e.code === 'KeyP' && state==='play') paused = !paused;
+  if (e.code === 'Space'){
+    if (state === 'title') { audioInit(); startRun(); }
+    else if (state === 'over') startRun();
+    else if (state === 'play' && !paused) firePing();
+  }
+  if (e.code === 'KeyR' && state === 'over') startRun();
+});
+addEventListener('keyup', e => keys[e.code] = false);
+
+cvs.addEventListener('pointerdown', e => {
+  audioInit();
+  pointer.down = true; pointer.sx = e.clientX; pointer.sy = e.clientY;
+  pointer.t = performance.now(); pointer.moved = 0;
+});
+addEventListener('pointermove', e => {
+  if (!pointer.down) return;
+  pointer.moved += Math.hypot(e.clientX - pointer.sx, e.clientY - pointer.sy);
+  pointer.sx = e.clientX; pointer.sy = e.clientY;
+});
+addEventListener('pointerup', () => {
+  if (!pointer.down) return;
+  pointer.down = false;
+  const quick = performance.now() - pointer.t < 230 && pointer.moved < 12;
+  if (state === 'title')      startRun();
+  else if (state === 'over')  startRun();
+  else if (state === 'play' && !paused && quick) firePing();
+});
+document.getElementById('mute').addEventListener('pointerdown', e => {
+  e.stopPropagation(); audioInit(); toggleMute();
+});
+document.getElementById('pingbtn').addEventListener('pointerdown', e => {
+  e.stopPropagation(); e.preventDefault(); audioInit();
+  if (state==='play' && !paused) firePing();
+});
+addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('visibilitychange', () => { if (document.hidden && state==='play') paused = true; });
+
+function toggleMute(){
+  muted = !muted;
+  document.getElementById('mute').textContent = muted ? '×' : '♪';
+}
+
+function firePing(){
+  if (pings <= 0){ sEmpty(); flashDots(); return; }
+  pings--; hudPings();
+  rings.push({x:player.x, y:player.y, r:2, prevR:0, max:TUNE.ringMax, hue:'c'});
+  sPing();
+}
+
+/* ============================================================
+   simulation
+   ============================================================ */
+function step(dt){
+  // --- swim ---
+  let dx = (keys.KeyD||keys.ArrowRight?1:0) - (keys.KeyA||keys.ArrowLeft?1:0);
+  let dy = (keys.KeyS||keys.ArrowDown?1:0)  - (keys.KeyW||keys.ArrowUp?1:0);
+  if (pointer.down){
+    const wx = pointer.sx + cam.x - W/2, wy = pointer.sy + cam.y - H/2;
+    const ax = wx - player.x, ay = wy - player.y, m = Math.hypot(ax, ay);
+    if (m > 14){ dx = ax/m; dy = ay/m; }
+  }
+  const m = Math.hypot(dx, dy) || 1;
+  const tvx = dx/m * TUNE.swimSpeed * (dx||dy ? 1 : 0);
+  const tvy = dy/m * TUNE.swimSpeed * (dx||dy ? 1 : 0);
+  const k = 1 - Math.exp(-TUNE.swimLerp * dt);
+  player.vx += (tvx - player.vx) * k;
+  player.vy += (tvy - player.vy) * k;
+  player.px = player.x; player.py = player.y;
+  player.x += player.vx * dt; player.y += player.vy * dt;
+  collide();
+
+  trail.push({x:player.x, y:player.y});
+  if (trail.length > 22) trail.shift();
+
+  // --- rings sweep & reveal ---
+  for (let i = rings.length-1; i >= 0; i--){
+    const rg = rings[i];
+    rg.prevR = rg.r; rg.r += TUNE.ringSpeed * dt;
+    reveal(rg);
+    if (rg.r > rg.max) rings.splice(i, 1);
+  }
+
+  // --- afterglow decay ---
+  for (let i = 0; i < glowC.length; i++){
+    if (glowC[i] > 0) glowC[i] = Math.max(0, glowC[i] - TUNE.glowDecay * dt);
+    if (glowA[i] > 0) glowA[i] = Math.max(0, glowA[i] - TUNE.glowDecay * dt);
+  }
+
+  // --- the gate breathes ---
+  exitTimer -= dt;
+  if (exitTimer <= 0){
+    exitTimer = TUNE.exitPulseEvery;
+    rings.push({x:exitPos.x, y:exitPos.y, r:2, prevR:0, max:TUNE.exitRingMax, hue:'a'});
+    const d = Math.hypot(exitPos.x-player.x, exitPos.y-player.y);
+    if (d < 900) sGate(0.05 + 0.1 * Math.max(0, 1 - d/900));
+  }
+
+  // --- shards ---
+  for (const s of shardList){
+    if (s.taken) continue;
+    if (Math.hypot(s.x-player.x, s.y-player.y) < 16){
+      s.taken = true; shardsGot++; score += 50;
+      pings++; air = Math.min(99, air + TUNE.shardAir);
+      rings.push({x:s.x, y:s.y, r:2, prevR:0, max:110, hue:'c'});
+      sShard(); hudPings(); hudStatic();
+    }
+  }
+
+  // --- reach the gate ---
+  if (Math.hypot(exitPos.x-player.x, exitPos.y-player.y) < CELL*0.8){
+    score += 200 + floor*50 + Math.round(air)*2;
+    sClear();
+    state = 'clear';
+    banner('depth ' + (floor+1));
+    setTimeout(() => { floor++; newFloor(floor); state = 'play'; }, 1400);
+  }
+
+  // --- air ---
+  air -= dt;
+  if (air <= 0){ air = 0; gameOver(); }
+  hudDyn();
+
+  // --- camera ---
+  const ck = 1 - Math.exp(-5 * dt);
+  cam.x += (player.x - cam.x) * ck;
+  cam.y += (player.y - cam.y) * ck;
+}
+
+function reveal(rg){
+  const isC = rg.hue === 'c';
+  const glow = isC ? glowC : glowA;
+  const pad = 6;
+  const c0 = Math.max(0, ((rg.x - rg.r - pad)/CELL)|0), c1 = Math.min(COLS-1, ((rg.x + rg.r + pad)/CELL)|0);
+  const r0 = Math.max(0, ((rg.y - rg.r - pad)/CELL)|0), r1 = Math.min(ROWS-1, ((rg.y + rg.r + pad)/CELL)|0);
+  const lo = rg.prevR - 5, hi = rg.r + 5;
+  for (let cy = r0; cy <= r1; cy++){
+    const py = (cy + 0.5) * CELL - rg.y;
+    for (let cx = c0; cx <= c1; cx++){
+      const i = cy*COLS + cx;
+      if (!cave.map[i]) continue;
+      const px = (cx + 0.5) * CELL - rg.x;
+      const d = Math.sqrt(px*px + py*py);
+      if (d >= lo && d <= hi){
+        const strength = 0.95 * (1 - d / rg.max);
+        if (strength > glow[i]) glow[i] = strength;
+      }
+    }
+  }
+  // discovery of shards & the gate
+  for (const s of shardList){
+    if (s.taken || s.discovered) continue;
+    const d = Math.hypot(s.x - rg.x, s.y - rg.y);
+    if (d >= lo && d <= hi) s.discovered = true;
+  }
+  if (!exitDiscovered){
+    const d = Math.hypot(exitPos.x - rg.x, exitPos.y - rg.y);
+    if ((d >= lo && d <= hi) || d < 90) exitDiscovered = true;
+  }
+}
+
+function collide(){
+  const r = TUNE.playerR;
+  const c0 = Math.max(0, ((player.x - r)/CELL)|0), c1 = Math.min(COLS-1, ((player.x + r)/CELL)|0);
+  const r0 = Math.max(0, ((player.y - r)/CELL)|0), r1 = Math.min(ROWS-1, ((player.y + r)/CELL)|0);
+  let bumped = false;
+  for (let cy = r0; cy <= r1; cy++){
+    for (let cx = c0; cx <= c1; cx++){
+      const i = cy*COLS + cx;
+      if (!cave.map[i]) continue;
+      const nx = Math.max(cx*CELL, Math.min(player.x, (cx+1)*CELL));
+      const ny = Math.max(cy*CELL, Math.min(player.y, (cy+1)*CELL));
+      let ddx = player.x - nx, ddy = player.y - ny;
+      const d2 = ddx*ddx + ddy*ddy;
+      if (d2 < r*r){
+        const d = Math.sqrt(d2);
+        if (d < 1e-4){ player.x = player.px; player.y = player.py; player.vx = player.vy = 0; }
+        else {
+          const push = (r - d) / d;
+          player.x += ddx * push; player.y += ddy * push;
+          const vn = (player.vx*ddx + player.vy*ddy) / d;
+          if (vn < 0){ player.vx -= vn*ddx/d; player.vy -= vn*ddy/d; }
+        }
+        // feel the wall: faint tactile glow
+        if (glowC[i] < 0.4) glowC[i] = 0.4;
+        bumped = true;
+      }
+    }
+  }
+  if (bumped){
+    const now = performance.now();
+    const spd = Math.hypot(player.vx, player.vy);
+    if (now - lastBump > 180 && spd > 40){ lastBump = now; sThud(); }
+  }
+}
+
+function gameOver(){
+  state = 'over';
+  sOver();
+  sessionBest = Math.max(sessionBest, score);
+  document.getElementById('overstats').innerHTML =
+    'depth reached <b>' + floor + '</b><br>' +
+    'shards <b>' + shardsGot + '</b><br>' +
+    'score <b>' + score + '</b><br>' +
+    'session best <b>' + sessionBest + '</b>';
+  show('over', true);
+}
+
+/* ============================================================
+   render
+   ============================================================ */
+function draw(){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle = '#050912';
+  ctx.fillRect(0, 0, W, H);
+  if (!cave){ if (vignette) ctx.drawImage(vignette, 0, 0, W, H); return; }
+
+  const ox = W/2 - cam.x, oy = H/2 - cam.y;
+  ctx.save();
+  ctx.translate(ox, oy);
+
+  // --- walls: only what memory or light still holds ---
+  const vc0 = Math.max(0, ((cam.x - W/2)/CELL - 1)|0), vc1 = Math.min(COLS-1, ((cam.x + W/2)/CELL + 1)|0);
+  const vr0 = Math.max(0, ((cam.y - H/2)/CELL - 1)|0), vr1 = Math.min(ROWS-1, ((cam.y + H/2)/CELL + 1)|0);
+  const AR = TUNE.ambientR;
+  for (let cy = vr0; cy <= vr1; cy++){
+    for (let cx = vc0; cx <= vc1; cx++){
+      const i = cy*COLS + cx;
+      if (!cave.map[i]) continue;
+      let g = glowC[i], a = glowA[i];
+      const mx = (cx+0.5)*CELL - player.x, my = (cy+0.5)*CELL - player.y;
+      const pd = Math.sqrt(mx*mx + my*my);
+      if (pd < AR) g = Math.max(g, 0.13 * (1 - pd/AR)); // ambient touch-light
+      const tot = g + a;
+      if (tot <= 0.012) continue;
+      const wC = g / tot, wA = a / tot;
+      const R = Math.round(110*wC + 255*wA), G = Math.round(215*wC + 176*wA), B = Math.round(255*wC + 92*wA);
+      ctx.globalAlpha = Math.min(1, tot) * 0.85;
+      ctx.fillStyle = 'rgb(' + R + ',' + G + ',' + B + ')';
+      const x = cx*CELL, y = cy*CELL;
+      if (ctx.roundRect){ ctx.beginPath(); ctx.roundRect(x+1.5, y+1.5, CELL-3, CELL-3, 4); ctx.fill(); }
+      else ctx.fillRect(x+1.5, y+1.5, CELL-3, CELL-3);
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  // --- shards ---
+  const t = performance.now()/1000;
+  for (const s of shardList){
+    if (s.taken || !s.discovered) continue;
+    const tw = 0.55 + 0.45 * Math.sin(t*3 + s.phase);
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.rotate(t*0.8 + s.phase);
+    ctx.globalAlpha = tw;
+    ctx.fillStyle = '#bff1ff';
+    ctx.shadowColor = '#7fe3ff'; ctx.shadowBlur = 12;
+    ctx.fillRect(-3.5, -3.5, 7, 7);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+
+  // --- the gate ---
+  if (exitDiscovered){
+    const pulse = 0.7 + 0.3 * Math.sin(t*2.2);
+    const grad = ctx.createRadialGradient(exitPos.x, exitPos.y, 1, exitPos.x, exitPos.y, 26);
+    grad.addColorStop(0, 'rgba(255,206,140,' + (0.9*pulse) + ')');
+    grad.addColorStop(1, 'rgba(255,179,92,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(exitPos.x-26, exitPos.y-26, 52, 52);
+    ctx.fillStyle = 'rgba(255,224,180,' + pulse + ')';
+    ctx.beginPath(); ctx.arc(exitPos.x, exitPos.y, 5, 0, 7); ctx.fill();
+  }
+
+  // --- rings ---
+  for (const rg of rings){
+    const life = Math.max(0, 1 - rg.r / rg.max);
+    const col = rg.hue === 'c' ? '127,227,255' : '255,179,92';
+    ctx.strokeStyle = 'rgba(' + col + ',' + (0.30*life) + ')';
+    ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.arc(rg.x, rg.y, rg.r, 0, 7); ctx.stroke();
+    ctx.strokeStyle = 'rgba(' + col + ',' + (0.85*life) + ')';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(rg.x, rg.y, rg.r, 0, 7); ctx.stroke();
+  }
+
+  // --- trail + player ---
+  for (let i = 0; i < trail.length; i++){
+    const p = trail[i], f = i/trail.length;
+    ctx.globalAlpha = 0.10 * f;
+    ctx.fillStyle = '#9fdcff';
+    ctx.beginPath(); ctx.arc(p.x, p.y, 3.2*f + 0.6, 0, 7); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.shadowColor = '#7fe3ff'; ctx.shadowBlur = 16;
+  ctx.fillStyle = '#eef9ff';
+  ctx.beginPath(); ctx.arc(player.x, player.y, 3.6, 0, 7); ctx.fill();
+  ctx.shadowBlur = 0;
+
+  ctx.restore();
+  if (vignette) ctx.drawImage(vignette, 0, 0, W, H);
+
+  if (paused && state === 'play'){
+    ctx.fillStyle = 'rgba(5,9,18,0.55)'; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle = '#dfeef6'; ctx.font = '200 22px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('P A U S E D', W/2, H/2);
+  }
+}
+
+/* ============================================================
+   HUD & overlays
+   ============================================================ */
+const $ = id => document.getElementById(id);
+function hudPings(){
+  const el = $('pingdots');
+  const total = Math.max(pings, budgetFor(floor));
+  let html = '';
+  for (let i = 0; i < total; i++) html += '<i class="' + (i < pings ? '' : 'spent') + '"></i>';
+  el.innerHTML = html;
+}
+function flashDots(){
+  const el = $('pingdots');
+  el.style.transition = 'none'; el.style.opacity = '0.2';
+  setTimeout(() => { el.style.transition = 'opacity .3s'; el.style.opacity = '1'; }, 60);
+}
+function hudStatic(){
+  $('floorlbl').textContent = floor;
+  $('shardlbl').textContent = shardsGot;
+  $('scorelbl').textContent = score;
+}
+function hudDyn(){
+  $('airbar').style.width = (air / TUNE.airMax * 100) + '%';
+  $('airwrap').classList.toggle('low', air < 20);
+  $('scorelbl').textContent = score;
+  $('shardlbl').textContent = shardsGot;
+}
+function banner(text){
+  const b = $('banner');
+  b.textContent = text;
+  b.classList.add('show');
+  setTimeout(() => b.classList.remove('show'), 1200);
+}
+function show(id, on){ $(id).classList.toggle('hidden', !on); }
+
+/* ============================================================
+   boot
+   ============================================================ */
+function resize(){
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  W = innerWidth; H = innerHeight;
+  cvs.width = W * DPR; cvs.height = H * DPR;
+  // pre-render vignette
+  vignette = document.createElement('canvas');
+  vignette.width = W; vignette.height = H;
+  const v = vignette.getContext('2d');
+  const g = v.createRadialGradient(W/2, H/2, Math.min(W,H)*0.32, W/2, H/2, Math.hypot(W,H)*0.62);
+  g.addColorStop(0, 'rgba(5,9,18,0)');
+  g.addColorStop(1, 'rgba(2,4,9,0.9)');
+  v.fillStyle = g; v.fillRect(0, 0, W, H);
+}
+addEventListener('resize', resize);
+resize();
+
+let last = performance.now();
+function loop(now){
+  const dt = Math.min(0.05, (now - last)/1000);
+  last = now;
+  if (state === 'play' && !paused) step(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

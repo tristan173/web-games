@@ -1,0 +1,1256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>DRIFT — a game of momentum</title>
+<style>
+  :root{
+    --void:#050912;       /* beyond the ice */
+    --rink:#0a1522;
+    --glacier:#a8e6ff;    /* you and the world: pale ice */
+    --glacier-dim:#3d6a85;
+    --ember:#ffb454;      /* want: pellets, armed nose, the chain, NEW BEST */
+    --bone:#dfeef6;
+    --faint:#5d7686;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--void);
+    font-family:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+    color:var(--bone); -webkit-user-select:none;user-select:none;overscroll-behavior:none}
+  canvas{display:block;position:fixed;inset:0;touch-action:none}
+
+  /* ---------- HUD ---------- */
+  #hud{position:fixed;inset:0;pointer-events:none;
+    padding:calc(12px + env(safe-area-inset-top,0px)) calc(18px + env(safe-area-inset-right,0px))
+            12px calc(18px + env(safe-area-inset-left,0px));
+    display:flex;justify-content:space-between;align-items:flex-start;
+    font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);
+    transition:opacity .3s}
+  body.title #hud{opacity:0}
+  .stat{opacity:.85}
+  .stat b{color:var(--bone);font-weight:600;font-size:20px;letter-spacing:.06em;
+    vertical-align:middle;margin-left:6px}
+  #bestlbl{transition:opacity .4s}
+  #bestlbl.dim{opacity:.45}
+  #chainlbl{color:var(--ember);display:inline-block}
+  #chainlbl.hidden{display:none}
+  @keyframes chainpulse{0%{transform:scale(1.45)}100%{transform:scale(1)}}
+  #chainlbl.pulse{animation:chainpulse .25s ease-out}
+  @media (prefers-reduced-motion:reduce){#chainlbl.pulse{animation:none}}
+
+  /* ---------- overlays ---------- */
+  .overlay{position:fixed;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;
+    pointer-events:none;padding:24px;background:radial-gradient(ellipse at center,
+      rgba(5,9,18,.2) 0%, rgba(5,9,18,.78) 100%);transition:opacity .25s}
+  .overlay.hidden{opacity:0;visibility:hidden}
+  h1{font-weight:200;font-size:min(18vw,150px);letter-spacing:.35em;
+    margin:0 0 6px .35em;color:var(--bone);text-shadow:0 0 30px rgba(168,230,255,.3)}
+  .sub{letter-spacing:.3em;text-transform:uppercase;font-size:11px;color:var(--glacier);
+    margin-bottom:30px}
+  .hint{font-size:11px;letter-spacing:.14em;color:var(--faint);opacity:.55;
+    text-transform:uppercase}
+  .hint+.hint{margin-top:6px}
+
+  /* ---------- tuning drawer (drift.html?tune) ---------- */
+  #tuner{position:fixed;top:0;right:0;bottom:0;width:280px;z-index:9;display:none;
+    background:rgba(5,9,18,.93);border-left:1px solid var(--glacier-dim);
+    padding:16px 16px calc(20px + env(safe-area-inset-bottom,0px));overflow-y:auto;
+    font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  body.tune #tuner{display:block}
+  body.tune #hud{padding-right:296px}
+  body.tune #snd{right:292px}
+  body.tune .overlay{right:280px}
+  #tuner h2{font-weight:200;font-size:16px;letter-spacing:.4em;color:var(--bone);margin:0 0 4px}
+  #tuner .note{opacity:.6;line-height:1.7}
+  #tuner .grp{margin-top:16px;color:var(--glacier);opacity:.75}
+  #tuner .row{margin-top:9px}
+  #tuner .row label{display:flex;justify-content:space-between}
+  #tuner .row i{font-style:normal;color:var(--bone)}
+  #tuner input[type=range]{width:100%;accent-color:var(--glacier);height:18px;margin:3px 0 0}
+  #tuner input[type=checkbox]{accent-color:var(--glacier)}
+  #tuner .chk{display:flex;justify-content:space-between;align-items:center;margin-top:10px}
+  #tuner .btns{display:flex;gap:8px;margin-top:18px}
+  #tuner button{flex:1;background:none;border:1px solid var(--glacier-dim);color:var(--glacier);
+    font:inherit;letter-spacing:.14em;padding:7px 0;cursor:pointer;border-radius:4px;
+    text-transform:uppercase}
+  #tuner button:hover{border-color:var(--glacier)}
+  .cta{margin-top:30px;font-size:13px;letter-spacing:.28em;
+    color:var(--glacier);animation:breathe 2.4s ease-in-out infinite}
+  @keyframes breathe{0%,100%{opacity:.35}50%{opacity:1}}
+  @media (prefers-reduced-motion:reduce){.cta{animation:none;opacity:.8}}
+  #title.dissolve{transition:opacity .25s;opacity:0}
+
+  #overkicker{font-weight:200;font-size:min(8vw,40px);letter-spacing:.4em;
+    text-transform:uppercase;color:var(--bone);opacity:.85;margin:0 0 10px .4em}
+  #overscore{font-weight:200;font-size:min(15vw,110px);letter-spacing:.12em;
+    color:var(--bone);line-height:1.1}
+  #overbest{font-size:13px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--faint);margin-top:12px}
+  @keyframes bestpulse{0%,100%{opacity:1}50%{opacity:.4}}
+  #overbest.newbest{color:var(--ember);font-size:clamp(17px,3vw,22px);
+    letter-spacing:.3em;animation:bestpulse 1.2s ease-in-out infinite}
+  @media (prefers-reduced-motion:reduce){#overbest.newbest{animation:none}}
+  #overbarwrap{width:200px;height:4px;border:1px solid var(--glacier-dim);
+    border-radius:2px;margin-top:14px;overflow:hidden}
+  #overbarwrap.hidden{display:none}
+  #overbar{height:100%;background:var(--glacier);border-radius:1px}
+  #overctx{font-size:13px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--faint);margin-top:16px}
+  #overctx.ember{color:var(--ember)}
+
+  #frozentitle{font-weight:200;font-size:min(9vw,44px);letter-spacing:.4em;
+    margin:0 0 14px .4em;color:var(--bone)}
+
+  /* ---------- chevrons ---------- */
+  .chev{position:fixed;bottom:calc(72px + env(safe-area-inset-bottom,0px));
+    font-size:30px;color:var(--glacier);opacity:0;transition:opacity .5s;
+    pointer-events:none;font-weight:200}
+  .chev.show{opacity:.4}
+  #chevL{left:26px} #chevR{right:26px}
+
+  /* ---------- sound toggle ---------- */
+  #snd{position:fixed;right:calc(10px + env(safe-area-inset-right,0px));
+    bottom:calc(8px + env(safe-area-inset-bottom,0px));
+    min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;
+    cursor:pointer;color:var(--faint);font-size:11px;letter-spacing:.18em;z-index:5}
+  #snd:hover{color:var(--glacier)}
+  #snd.off{opacity:.35;text-decoration:line-through}
+  /* on touch, the corner belongs to steering while a run is live */
+  @media (pointer:coarse){ body.playing #snd{pointer-events:none;opacity:.2} }
+</style>
+</head>
+<body class="title">
+<canvas id="c"></canvas>
+
+<div id="hud">
+  <div class="stat">Score <b id="scorelbl">0</b> <b id="chainlbl" class="hidden">x2</b></div>
+  <div class="stat">Best <b id="bestlbl" class="dim">0</b></div>
+</div>
+
+<div id="chevL" class="chev">‹</div>
+<div id="chevR" class="chev">›</div>
+
+<div id="title" class="overlay">
+  <h1>DRIFT</h1>
+  <div class="sub">a game of momentum</div>
+  <div class="hint" id="hintline">arrows steer - no brakes</div>
+  <div class="hint">eat sideways - the chain climbs</div>
+  <div class="cta" id="titlecta">click to carve</div>
+</div>
+
+<div id="over" class="overlay hidden">
+  <div id="overkicker">SHATTERED</div>
+  <div id="overscore">0</div>
+  <div id="overbest">BEST 0</div>
+  <div id="overbarwrap" class="hidden"><div id="overbar"></div></div>
+  <div id="overctx"></div>
+  <div class="cta" id="overcta">click to carve again</div>
+</div>
+
+<div id="frozen" class="overlay hidden">
+  <div id="frozentitle">FROZEN</div>
+  <div class="cta" id="frozencta">P to resume</div>
+</div>
+
+<div id="snd" title="sound (M)">SND</div>
+
+<script>
+'use strict';
+/* ============================================================
+   DRIFT — a game of momentum
+   Snake on ice: the nose answers instantly, the body slides.
+   One law — travel direction forever chasing heading — makes
+   every carve, every scratch, every death.
+   Single file. No dependencies. No build step.
+   Tuning knobs live right here:
+   ============================================================ */
+const TUNE = {
+  base: 640,            // world short side, in units u
+  aspectMax: 2.4,       // long side cap; void letterboxed beyond
+  simDt: 1/120,         // fixed timestep (s); input sampled every step
+  maxSteps: 5,          // catch-up cap per frame
+  jankGuard: 0.25,      // rAF gap (s) that auto-pauses instead of teleporting
+  turnRate: 3.4,        // rad/s, constant — the nose is always alive
+  grip0: 3.8,           // per s; how fast travel chases heading (lower = icier)
+  gripFloor: 0.6,       // grip multiplier floor as you grow
+  slipCap: 1.0472,      // 60 deg hard clamp on |heading - travel|
+  driftRef: 0.6,        // rad; driftFrac normalizer (scratch/spray/audio/gate)
+  biteMin: 0.3491,      // 20 deg; drift-bite gate + ember nose + double scratch
+  sprayMin: 0.2967,     // 17 deg; spray onset
+  speed0: 175,          // u/s
+  speedPer: 3,          // +u/s per pellet
+  speedCap: 360,
+  scrubMax: 0.21,       // carving scrubs up to 21% of speed — a cost, never a brake
+  startLen: 120,        // u of tail at spawn
+  growPer: 10,          // +u per pellet
+  trailDs: 3,           // u between trail samples
+  headW: 13,            // body width at head (tapers to 4.5)
+  wallKill: 3.0,        // u from rink edge that kills (nose overhangs first)
+  rinkInset: 20,        // u
+  rinkCorner: 100,      // u corner radius — forgiving, never pockets
+  tailKill: 5,          // u to any trail point beyond neck immunity
+  neckImmunity: 36,     // u of arc; max-curl chord ≈35 >> 5 — can't false-kill
+  pelletN: 3,
+  pelletR: 6,
+  pickupR: 23,          // generous without vacuuming
+  spawnEdge: 40, spawnHead: 140, spawnTrail: 40, firstAhead: 240,
+  chainCap: 8,
+  edgeWarnD: 90,        // u; edge glow lerps 35% -> 90% alpha inside this
+  ghostFade: 0.22,      // last life's scratches remain at 22%
+  hitstop: 0.09, slowmo: 0.25, slowmoEnd: 0.44,
+  lockout: 0.35, overlayAt: 0.44,
+  spawnRamp: 0.4,       // s of 0 -> base speed, eased — each run opens with a breath
+  timeRamp: 0.1,        // u/s of extra speed per second alive — the clock leans, gently
+  bergs: 0,             // frozen pillars rise on a timer (off by default; flip in ?tune)
+  bergFirst: 45,        // s before the first berg
+  bergEvery: 25,        // s between bergs
+  bergMax: 5,
+  bergR: 12,            // u
+};
+
+const clamp = (v,a,b) => v<a?a:v>b?b:v;
+const wrapPi = a => { a=(a+Math.PI)%(2*Math.PI); if(a<0)a+=2*Math.PI; return a-Math.PI; };
+const $ = id => document.getElementById(id);
+const COARSE = matchMedia('(pointer:coarse)').matches;
+const REDUCED = matchMedia('(prefers-reduced-motion:reduce)').matches;
+const HITSTOP = REDUCED ? 0.04 : TUNE.hitstop;
+
+/* ============================================================
+   world & canvas
+   ============================================================ */
+const cvs = $('c'); const ctx = cvs.getContext('2d');
+let W=0, H=0, DPR=1, scale=1, offX=0, offY=0;   // css px
+let LW=640, LH=640;                              // world size in u
+let rinkLayer=null, scratch=null, sctx=null, scratchScale=1;
+let glowEmber=null, glowGlacier=null;
+let resizeGrace = 0;                             // never kill for rotating
+
+function makeGlow(r,g,b,size){
+  const c=document.createElement('canvas'); c.width=c.height=size;
+  const x=c.getContext('2d');
+  const gr=x.createRadialGradient(size/2,size/2,1,size/2,size/2,size/2);
+  gr.addColorStop(0,'rgba(255,255,255,.9)');
+  gr.addColorStop(.25,'rgba('+r+','+g+','+b+',.55)');
+  gr.addColorStop(1,'rgba('+r+','+g+','+b+',0)');
+  x.fillStyle=gr; x.fillRect(0,0,size,size);
+  return c;
+}
+
+function pathRink(c){
+  const i=TUNE.rinkInset, r=TUNE.rinkCorner;
+  const x0=i,y0=i,x1=LW-i,y1=LH-i;
+  c.beginPath();
+  c.moveTo(x0+r,y0);
+  c.arcTo(x1,y0,x1,y1,r); c.arcTo(x1,y1,x0,y1,r);
+  c.arcTo(x0,y1,x0,y0,r); c.arcTo(x0,y0,x1,y0,r);
+  c.closePath();
+}
+
+function buildRinkLayer(){
+  rinkLayer=document.createElement('canvas');
+  rinkLayer.width=Math.max(1,Math.round(LW*scale*DPR));
+  rinkLayer.height=Math.max(1,Math.round(LH*scale*DPR));
+  const c=rinkLayer.getContext('2d');
+  c.setTransform(scale*DPR,0,0,scale*DPR,0,0);
+  pathRink(c); c.fillStyle='#0a1522'; c.fill();
+  c.save(); pathRink(c); c.clip();
+  const sheen=c.createRadialGradient(LW/2,LH/2,10,LW/2,LH/2,Math.max(LW,LH)*.55);
+  sheen.addColorStop(0,'rgba(14,28,44,1)'); sheen.addColorStop(1,'rgba(14,28,44,0)');
+  c.fillStyle=sheen; c.fillRect(0,0,LW,LH);
+  c.strokeStyle='rgba(255,255,255,.04)'; c.lineWidth=2;      // hockey nods
+  c.beginPath();
+  if(LW>=LH){ c.moveTo(LW/2,TUNE.rinkInset); c.lineTo(LW/2,LH-TUNE.rinkInset); }
+  else      { c.moveTo(TUNE.rinkInset,LH/2); c.lineTo(LW-TUNE.rinkInset,LH/2); }
+  c.stroke();
+  c.beginPath(); c.arc(LW/2,LH/2,90,0,7); c.stroke();
+  c.restore();
+  pathRink(c); c.strokeStyle='rgba(168,230,255,.35)'; c.lineWidth=1.5/scale; c.stroke();
+}
+
+function buildScratch(copyFrom){
+  scratchScale=scale*DPR*0.5;
+  const c=document.createElement('canvas');
+  c.width=Math.max(1,Math.round(LW*scratchScale));
+  c.height=Math.max(1,Math.round(LH*scratchScale));
+  const x=c.getContext('2d');
+  if(copyFrom) x.drawImage(copyFrom,0,0,c.width,c.height);
+  scratch=c; sctx=x;
+  sctx.lineCap='round';
+}
+
+function resizeNow(){
+  DPR=Math.min(2,window.devicePixelRatio||1);
+  W=innerWidth; H=innerHeight;
+  cvs.width=W*DPR; cvs.height=H*DPR;
+  const mn=Math.min(W,H), mx=Math.max(W,H);
+  const oldLW=LW, oldLH=LH;
+  const long=TUNE.base*clamp(mx/mn,1,TUNE.aspectMax);
+  if(W>=H){ LW=long; LH=TUNE.base; } else { LW=TUNE.base; LH=long; }
+  scale=mn/TUNE.base;
+  offX=(W-LW*scale)/2; offY=(H-LH*scale)/2;
+  if(oldLW && (oldLW!==LW||oldLH!==LH)){
+    rescaleWorld(oldLW,oldLH);
+    resizeGrace=0.5; graceRearm=true;
+  }
+}
+function rebuildLayers(){
+  buildRinkLayer();
+  buildScratch(scratch);
+  glowEmber=glowEmber||makeGlow(255,180,84,64);
+  glowGlacier=glowGlacier||makeGlow(168,230,255,64);
+}
+function resize(){ resizeNow(); rebuildLayers(); }
+let rzTimer=null;
+function onResize(){
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  if(innerWidth===W && innerHeight===H && dpr===DPR) return;
+  resizeNow();                       // world stays correct every event...
+  clearTimeout(rzTimer);
+  rzTimer=setTimeout(rebuildLayers,150);   // ...expensive repaints coalesce
+}
+
+/* ============================================================
+   rink geometry
+   ============================================================ */
+function rinkSDF(x,y){                        // negative inside
+  const i=TUNE.rinkInset, r=TUNE.rinkCorner;
+  const hx=LW/2-i-r, hy=LH/2-i-r;
+  const qx=Math.abs(x-LW/2)-hx, qy=Math.abs(y-LH/2)-hy;
+  const ax=Math.max(qx,0), ay=Math.max(qy,0);
+  return Math.hypot(ax,ay)+Math.min(Math.max(qx,qy),0)-r;
+}
+function nearestEdge(x,y){                    // nearest point on rink boundary
+  const i=TUNE.rinkInset, r=TUNE.rinkCorner;
+  const cx=clamp(x,i+r,LW-i-r), cy=clamp(y,i+r,LH-i-r);
+  let dx=x-cx, dy=y-cy;
+  const m=Math.hypot(dx,dy);
+  if(m>1e-6) return {x:cx+dx/m*r, y:cy+dy/m*r};
+  const dL=x-i, dR=LW-i-x, dT=y-i, dB=LH-i-y;  // deep interior: nearest side
+  const mn=Math.min(dL,dR,dT,dB);
+  if(mn===dL) return {x:i,y}; if(mn===dR) return {x:LW-i,y};
+  if(mn===dT) return {x,y:i}; return {x,y:LH-i};
+}
+
+/* ============================================================
+   game state
+   ============================================================ */
+let state='title';                 // title | play | dying | dead
+let paused=false;
+let px=0,py=0, theta=0, phi=0, speed=0, driftFrac=0, delta=0;
+let pelletsEaten=0, tailLen=TUNE.startLen, travel=0, lastSample=0;
+let score=0, chain=1, best=0, bestPassed=false, newBest=false;
+let runLongestChain=1, sessionLongestChain=1, diedChain=1;
+let spawnT=0, runT=0, deathT=0, deathPt={x:0,y:0}, deathTrailLen=0;
+let shatterIdx=0;
+let pellets=[];                    // {x,y,phase}
+let bergs=[], nextBergAt=0;        // {x,y,r,t} — t rises to 1.2 before solid
+let steerStack=[];                 // {id,side} — most recent wins
+let sprayDebt=0, shakeT=9, hints=0, firstRun=true, graceRearm=false, shardProb=1;
+let demo={t:0};
+
+const CAP=4096;
+const trailX=new Float32Array(CAP), trailY=new Float32Array(CAP), trailD=new Float32Array(CAP);
+let tHead=0, tTail=0;
+
+const store={
+  get(k,d){ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } },
+  set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} },
+};
+best=parseInt(store.get('drift.best','0'),10)||0;
+hints=parseInt(store.get('drift.hints','0'),10)||0;
+let bestChain=parseInt(store.get('drift.bestChain','1'),10)||1, newChainRec=false;
+
+function rescaleWorld(oldLW,oldLH){
+  // map relative to the playable frame (inset is fixed in u), so the old rink
+  // interior lands exactly inside the new one — never in the kill band
+  const n=TUNE.rinkInset;
+  const fx=(LW-2*n)/(oldLW-2*n), fy=(LH-2*n)/(oldLH-2*n);
+  const mx=v=>n+(v-n)*fx, my=v=>n+(v-n)*fy;
+  px=mx(px); py=my(py);
+  for(let k=tTail;k<tHead;k++){ const i=k&(CAP-1); trailX[i]=mx(trailX[i]); trailY[i]=my(trailY[i]); }
+  for(const p of pellets){ p.x=mx(p.x); p.y=my(p.y); }
+  for(const p of pool){ if(p.life>0){ p.x=mx(p.x); p.y=my(p.y); } }
+  for(const p of popups){ if(p.t<p.max){ p.x=mx(p.x); p.y=my(p.y); } }
+  for(const b of bergs){ b.x=mx(b.x); b.y=my(b.y); }
+  deathPt.x=mx(deathPt.x); deathPt.y=my(deathPt.y);
+  const sd=rinkSDF(px,py);                 // corners can still pinch: nudge clear
+  if(sd>-(TUNE.wallKill+6)){
+    const e=nearestEdge(px,py);
+    let ix=px-e.x, iy=py-e.y; const m=Math.hypot(ix,iy)||1;
+    if(sd>0){ ix=-ix; iy=-iy; }
+    px=e.x+ix/m*(TUNE.wallKill+6); py=e.y+iy/m*(TUNE.wallKill+6);
+  }
+}
+
+/* ============================================================
+   audio — tiny synth, built on first gesture
+   the skid hiss is the music
+   ============================================================ */
+let AC=null, master=null, muted=false, noiseBuf=null;
+let glideGain=null, skidGain=null, skidFilt=null;
+function audioInit(){
+  if(AC){ if(AC.state!=='running') AC.resume(); return; }   // incl. iOS 'interrupted'
+  try{
+    AC=new (window.AudioContext||window.webkitAudioContext)();
+    if(AC.state!=='running') AC.resume();
+    const comp=AC.createDynamicsCompressor();
+    comp.threshold.value=-18; comp.ratio.value=4;
+    comp.connect(AC.destination);
+    master=AC.createGain(); master.gain.value=muted?0:0.5; master.connect(comp);
+    noiseBuf=AC.createBuffer(1,AC.sampleRate*2,AC.sampleRate);
+    const d=noiseBuf.getChannelData(0);
+    for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+    const src=AC.createBufferSource(); src.buffer=noiseBuf; src.loop=true;
+    const glideFilt=AC.createBiquadFilter(); glideFilt.type='lowpass'; glideFilt.frequency.value=400;
+    glideGain=AC.createGain(); glideGain.gain.value=0;
+    src.connect(glideFilt); glideFilt.connect(glideGain); glideGain.connect(master);
+    skidFilt=AC.createBiquadFilter(); skidFilt.type='bandpass'; skidFilt.frequency.value=900; skidFilt.Q.value=1.2;
+    skidGain=AC.createGain(); skidGain.gain.value=0;
+    src.connect(skidFilt); skidFilt.connect(skidGain); skidGain.connect(master);
+    src.start();
+  }catch(e){ AC=null; }
+}
+function audioFrame(){
+  if(!AC) return;
+  const t=AC.currentTime, alive=(state==='play'&&!paused);
+  glideGain.gain.setTargetAtTime(alive?0.03+0.02*(speed/TUNE.speedCap):0, t, 0.05);
+  skidFilt.frequency.setTargetAtTime(
+    (900+2600*driftFrac)*(0.8+0.6*speed/TUNE.speedCap), t, 0.05);
+  skidGain.gain.setTargetAtTime(alive?0.22*driftFrac*driftFrac:0, t, 0.05);
+}
+function pluck(freq,gain,decay,when){
+  if(!AC) return; const t=(when||AC.currentTime);
+  const o=AC.createOscillator(), g=AC.createGain();
+  o.type='triangle'; o.frequency.setValueAtTime(freq,t);
+  g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(gain,t+0.002);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+decay);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+decay+0.05);
+}
+function noiseHit(filtType,freq,dur,gain,f1){
+  if(!AC) return; const t=AC.currentTime;
+  const s=AC.createBufferSource(); s.buffer=noiseBuf;
+  const f=AC.createBiquadFilter(); f.type=filtType; f.frequency.setValueAtTime(freq,t);
+  if(f1) f.frequency.exponentialRampToValueAtTime(f1,t+dur);
+  const g=AC.createGain();
+  g.gain.setValueAtTime(gain,t); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  s.connect(f); f.connect(g); g.connect(master); s.start(t); s.stop(t+dur+0.05);
+}
+const LADDER=[523,587,659,784,880,1047,1175,1319];
+function sEat(chainAfter,bite){
+  const f=LADDER[clamp(chainAfter-1,0,7)];
+  pluck(f,0.25,0.18);
+  noiseHit('bandpass',4000,0.03,0.08);
+  if(bite) pluck(f*1.5,0.12,0.18);
+}
+function sChainBroken(){
+  if(!AC) return; const t=AC.currentTime;
+  const o=AC.createOscillator(), g=AC.createGain();
+  o.type='triangle'; o.frequency.setValueAtTime(392,t);
+  o.frequency.exponentialRampToValueAtTime(392*Math.pow(2,-2/12),t+0.12);
+  g.gain.setValueAtTime(0.2,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.2);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+0.25);
+}
+function sDeath(){
+  if(!AC) return; const t=AC.currentTime;
+  noiseHit('highpass',1800,0.08,0.5);                       // CRACK
+  for(let i=0;i<5;i++) pluck(800-i*125+Math.random()*60,0.15,0.1,t+0.09+i*0.04);
+  const o=AC.createOscillator(), g=AC.createGain();          // whumm
+  o.type='sine'; o.frequency.setValueAtTime(55,t+0.09);
+  o.frequency.exponentialRampToValueAtTime(30,t+0.34);
+  g.gain.setValueAtTime(0.4,t+0.09); g.gain.exponentialRampToValueAtTime(0.0001,t+0.4);
+  o.connect(g); g.connect(master); o.start(t+0.09); o.stop(t+0.45);
+}
+const sRestart = () => noiseHit('bandpass',3000,0.2,0.15,600);   // skates set
+const sBestTick = () => pluck(880,0.1,0.25);
+function sNewBest(){
+  if(!AC) return; const t=AC.currentTime;
+  pluck(660,0.15,0.12,t); pluck(880,0.15,0.12,t+0.18);
+}
+function toggleMute(){
+  muted=!muted; store.set('drift.muted',muted?'1':'0');
+  $('snd').classList.toggle('off',muted);
+  if(AC) master.gain.setTargetAtTime(muted?0:0.5,AC.currentTime,0.02);
+}
+if(store.get('drift.muted','0')==='1'){ muted=true; $('snd').classList.add('off'); }
+
+/* ============================================================
+   particles & popups — pooled, no allocation in the hot path
+   ============================================================ */
+const POOL=160;
+const pool=[]; for(let i=0;i<POOL;i++) pool.push({life:0,max:1,x:0,y:0,vx:0,vy:0,sz:1,kind:0,col:'#dfeef6'});
+let poolIdx=0;
+function spawnP(kind,x,y,vx,vy,life,sz,col){
+  const p=pool[poolIdx]; poolIdx=(poolIdx+1)%POOL;
+  p.kind=kind; p.x=x; p.y=y; p.vx=vx; p.vy=vy; p.life=life; p.max=life; p.sz=sz;
+  p.col=col||(kind===1?'#cbeeff':(Math.random()<0.7?'#dfeef6':'#a8e6ff'));
+}
+const popups=[]; for(let i=0;i<8;i++) popups.push({t:9,max:0.5,x:0,y:0,txt:''});
+let popIdx=0;
+function spawnPopup(x,y,txt){
+  const p=popups[popIdx]; popIdx=(popIdx+1)%popups.length;
+  p.t=0; p.x=x; p.y=y; p.txt=txt;
+}
+
+/* ============================================================
+   pellets — cold world, warm food
+   ============================================================ */
+function trailTooClose(x,y,r){
+  for(let k=tTail;k<tHead;k+=4){
+    const i=k&(CAP-1), dx=trailX[i]-x, dy=trailY[i]-y;
+    if(dx*dx+dy*dy<r*r) return true;
+  }
+  return false;
+}
+function spawnPellet(){
+  for(let tries=0;tries<40;tries++){
+    const x=TUNE.rinkInset+Math.random()*(LW-2*TUNE.rinkInset);
+    const y=TUNE.rinkInset+Math.random()*(LH-2*TUNE.rinkInset);
+    if(rinkSDF(x,y)>-TUNE.spawnEdge) continue;
+    const dx=x-px, dy=y-py;
+    if(dx*dx+dy*dy<TUNE.spawnHead*TUNE.spawnHead) continue;
+    if(tries<20 && trailTooClose(x,y,TUNE.spawnTrail)) continue;
+    let clear=true;
+    for(const b of bergs){ if(Math.hypot(b.x-x,b.y-y)<b.r+26){ clear=false; break; } }
+    if(!clear) continue;
+    return {x,y,phase:Math.random()*7};
+  }
+  return {x:LW/2,y:LH/2,phase:0};
+}
+function spawnBerg(){
+  const r=TUNE.bergR;
+  for(let t=0;t<40;t++){
+    const x=TUNE.rinkInset+Math.random()*(LW-2*TUNE.rinkInset);
+    const y=TUNE.rinkInset+Math.random()*(LH-2*TUNE.rinkInset);
+    if(rinkSDF(x,y)>-(r+28)) continue;                    // never crowd the wall
+    const dx=x-px, dy=y-py;
+    if(dx*dx+dy*dy<160*160) continue;                     // never near the head
+    if(trailTooClose(x,y,r+26)) continue;
+    let ok=true;
+    for(const p of pellets){ if(Math.hypot(p.x-x,p.y-y)<r+34){ ok=false; break; } }
+    for(const b of bergs){ if(Math.hypot(b.x-x,b.y-y)<b.r+r+30){ ok=false; break; } }
+    if(ok){ bergs.push({x,y,r,t:0}); return; }
+  }
+}
+
+function resetPellets(firstAhead){
+  pellets.length=0;
+  if(firstAhead){
+    let fx=px+Math.cos(theta)*TUNE.firstAhead, fy=py+Math.sin(theta)*TUNE.firstAhead;
+    for(let i=0;i<20 && rinkSDF(fx,fy)>-TUNE.spawnEdge;i++){ fx+=(LW/2-fx)*.15; fy+=(LH/2-fy)*.15; }
+    pellets.push({x:fx,y:fy,phase:Math.random()*7});
+  }
+  while(pellets.length<TUNE.pelletN) pellets.push(spawnPellet());
+}
+
+/* ============================================================
+   run lifecycle
+   ============================================================ */
+function spawnPlayer(){
+  if(LW>=LH){ px=LW*0.25; py=LH*0.5; theta=0; }
+  else      { px=LW*0.5;  py=LH*0.25; theta=Math.PI/2; }
+  phi=theta; speed=0; spawnT=0; travel=0; lastSample=0;
+  tHead=0; tTail=0; driftFrac=0; delta=0;
+  tailLen=TUNE.startLen; pelletsEaten=0;
+}
+function startRun(fromTitle){
+  // the rink remembers exactly one life back
+  sctx.globalCompositeOperation='destination-in';
+  sctx.fillStyle='rgba(0,0,0,'+TUNE.ghostFade+')';
+  sctx.fillRect(0,0,scratch.width,scratch.height);
+  sctx.globalCompositeOperation='source-over';
+  for(const p of pool) p.life=0;
+  for(const p of popups) p.t=9;
+  score=0; chain=1; runLongestChain=1; bestPassed=false; newBest=false;
+  runT=0; sprayDebt=0; shakeT=9;
+  spawnPlayer();
+  bergs.length=0; nextBergAt=TUNE.bergFirst;
+  resetPellets(true);
+  state='play'; paused=false;
+  if(!fromTitle) firstRun=false;
+  document.body.classList.remove('title');
+  document.body.classList.add('playing');
+  if(fromTitle){
+    const t=$('title'); t.classList.add('dissolve');
+    setTimeout(()=>{ t.classList.add('hidden'); t.classList.remove('dissolve'); },260);
+    burstAt(LW/2,LH*0.42,24);
+  }
+  showOver(false,true);
+  $('frozen').classList.add('hidden');
+  hudScore(); hudBest(); hudChain();
+  sRestart();
+  updateChev();
+}
+function burstAt(x,y,n,warm){
+  if(REDUCED) n=Math.round(n*0.3);
+  for(let i=0;i<n;i++){
+    const a=Math.random()*7, v=40+Math.random()*120;
+    spawnP(2,x,y,Math.cos(a)*v,Math.sin(a)*v,0.5+Math.random()*0.4,1.5+Math.random()*2,
+      warm?(Math.random()<0.6?'#ffb454':'#ffd9a0'):null);
+  }
+}
+
+/* ============================================================
+   death — CRACK, tinkle, whumm
+   ============================================================ */
+function die(cx,cy){
+  state='dying'; deathT=0; deathPt.x=cx; deathPt.y=cy;
+  const oldestArc=tHead>tTail?travel-trailD[tTail&(CAP-1)]:0;
+  deathTrailLen=Math.min(tailLen,oldestArc);      // early deaths own less body
+  shatterIdx=tTail; diedChain=chain;
+  shardProb=Math.min(1,110/Math.max(1,tHead-tTail))*(REDUCED?0.3:1);
+  updateChev();
+  shakeT=0; sDeath();
+  if(navigator.vibrate) navigator.vibrate(30);
+  sessionLongestChain=Math.max(sessionLongestChain,runLongestChain);
+  newChainRec=runLongestChain>bestChain;
+  if(newChainRec){ bestChain=runLongestChain; store.set('drift.bestChain',''+bestChain); }
+  if(score>best){ best=score; newBest=true; store.set('drift.best',''+best); }
+}
+function shatterStep(realDt){
+  // the body shatters tail-to-head as the frontier sweeps in
+  const t=deathT-HITSTOP;
+  const frac=clamp(t/0.12,0,1);
+  const cutoff=deathTrailLen*(1-frac);          // visible arc shrinks to 0
+  while(shatterIdx<tHead){
+    const i=shatterIdx&(CAP-1);
+    const arc=travel-trailD[i];
+    if(arc<=cutoff) break;
+    if(Math.random()<shardProb){
+      const j=(shatterIdx+1<tHead)?((shatterIdx+1)&(CAP-1)):i;
+      let tx=trailX[j]-trailX[i], ty=trailY[j]-trailY[i];
+      const m=Math.hypot(tx,ty)||1; tx/=m; ty/=m;
+      const a=Math.random()*7, rv=60+Math.random()*120;
+      spawnP(1,trailX[i],trailY[i],
+        tx*speed*0.4+Math.cos(a)*rv, ty*speed*0.4+Math.sin(a)*rv,
+        0.7, 2+Math.random()*2.5);
+    }
+    shatterIdx++;
+  }
+}
+function showOver(on,instant){
+  const el=$('over');
+  if(instant){ el.style.transition='none'; }
+  else el.style.transition='opacity .18s';
+  el.classList.toggle('hidden',!on);
+  if(instant){ void el.offsetWidth; el.style.transition='opacity .18s'; }
+}
+function presentDeath(){
+  state='dead';
+  document.body.classList.remove('playing');
+  $('overbest').className=''; $('overbarwrap').classList.add('hidden');
+  if(newBest){
+    $('overbest').textContent='NEW BEST '+best;
+    $('overbest').classList.add('newbest');
+    sNewBest();
+    burstAt(LW/2,LH*0.44,36,true);               // ember — earned it
+  } else {
+    $('overbest').textContent='BEST '+best;
+    if(best>0 && score/best>=0.5){
+      $('overbarwrap').classList.remove('hidden');
+      $('overbar').style.width=Math.min(99,Math.round(100*score/best))+'%';
+    }
+  }
+  $('overctx').classList.remove('ember');
+  if(newChainRec && runLongestChain>=3){
+    $('overctx').textContent='BEST CHAIN x'+runLongestChain;
+    $('overctx').classList.add('ember');
+  }
+  else if(diedChain>=4) $('overctx').textContent='CHAIN LOST x'+diedChain;
+  else if(runLongestChain>=3 && runLongestChain>=sessionLongestChain)
+    $('overctx').textContent='LONGEST CHAIN x'+runLongestChain;
+  else $('overctx').textContent='PELLETS '+pelletsEaten;
+  hudBest();
+  showOver(true,false);
+  const el=$('overscore'), t0=performance.now();      // count up, with ticks
+  const tick=()=>{
+    const f=clamp((performance.now()-t0)/500,0,1);
+    el.textContent=Math.round(score*f*f);
+    if(f<1 && state==='dead') requestAnimationFrame(tick); else el.textContent=score;
+  };
+  tick();
+}
+
+/* ============================================================
+   input — bang-bang; all the lag lives in the vehicle
+   ============================================================ */
+function steerVal(){
+  if(state==='title'){                                   // attract demo steers itself
+    const d=-rinkSDF(px,py);
+    if(d<120){
+      const want=Math.atan2(LH/2-py,LW/2-px);
+      return clamp(wrapPi(want-theta)*2,-1,1);
+    }
+    return Math.sin(0.6*demo.t);
+  }
+  return steerStack.length?steerStack[steerStack.length-1].side:0;
+}
+function pushSteer(id,side){
+  steerStack=steerStack.filter(s=>s.id!==id);
+  steerStack.push({id,side});
+  if(hints<3){ hints++; store.set('drift.hints',''+hints); updateChev(); }
+}
+function popSteer(id){ steerStack=steerStack.filter(s=>s.id!==id); }
+function anyInput(){                                     // starts / restarts
+  if(state==='title'){ startRun(true); return true; }
+  if(state==='dying' && deathT>=TUNE.lockout){ startRun(false); return true; }
+  if(state==='dead'){ startRun(false); return true; }
+  return false;
+}
+const KEYSIDE={ArrowLeft:-1,KeyA:-1,ArrowRight:1,KeyD:1};
+addEventListener('keydown',e=>{
+  if(e.target&&(e.target.tagName==='INPUT'||e.target.tagName==='BUTTON')) return;
+  if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+  if(e.repeat) return;
+  audioInit();
+  if(e.code==='KeyM'){ toggleMute(); return; }
+  if(e.code==='KeyP'){
+    if(state==='play'){ paused=!paused; frozenUI(); }
+    return;
+  }
+  const side=KEYSIDE[e.code];
+  if(paused && state==='play'){              // the resuming press still steers
+    paused=false; frozenUI();
+    if(side) pushSteer('k'+e.code,side);
+    return;
+  }
+  if(side) pushSteer('k'+e.code,side);
+  anyInput();
+});
+addEventListener('keyup',e=>{ if(KEYSIDE[e.code]) popSteer('k'+e.code); });
+
+cvs.addEventListener('pointerdown',e=>{
+  e.preventDefault(); audioInit();
+  const steers=e.pointerType!=='mouse';      // touch and pen both steer
+  if(paused && state==='play'){              // the resuming touch still steers
+    paused=false; frozenUI();
+    if(steers) pushSteer('p'+e.pointerId, e.clientX<W/2?-1:1);
+    return;
+  }
+  if(steers) pushSteer('p'+e.pointerId, e.clientX<W/2?-1:1);
+  anyInput();
+});
+addEventListener('pointerup',e=>popSteer('p'+e.pointerId));
+addEventListener('pointercancel',e=>popSteer('p'+e.pointerId));
+$('snd').addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); audioInit(); toggleMute(); });
+addEventListener('contextmenu',e=>e.preventDefault());
+addEventListener('blur',()=>{
+  steerStack=steerStack.filter(s=>typeof s.id!=='string'||s.id[0]!=='k');
+  if(state==='play'&&!paused){ paused=true; frozenUI(); }
+  audioFrame();                              // silence the bed right now
+});
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){
+    if(state==='play' && !paused){ paused=true; frozenUI(); }
+    audioFrame();
+    if(AC && AC.state==='running') AC.suspend();
+  } else if(AC && AC.state!=='running') AC.resume();
+});
+function frozenUI(){ $('frozen').classList.toggle('hidden',!(paused&&state==='play')); }
+function updateChev(){
+  const show=hints<3 && (state==='title' || (firstRun&&state==='play'&&runT<3));
+  $('chevL').classList.toggle('show',show);
+  $('chevR').classList.toggle('show',show);
+}
+if(COARSE){
+  $('hintline').textContent='hold left or right - no brakes';
+  $('titlecta').textContent='touch to carve';
+  $('overcta').textContent='touch to carve again';
+  $('frozencta').textContent='touch to resume';
+}
+
+/* ============================================================
+   simulation — one law, fixed 120 Hz
+   ============================================================ */
+function step(dt){
+  const demoMode=(state==='title');
+  if(demoMode) demo.t+=dt;
+  runT+=dt;
+
+  // 1. the nose is always alive
+  theta=wrapPi(theta+steerVal()*TUNE.turnRate*dt);
+
+  // 2. travel forever chases heading; grip fades as you grow
+  const grip=TUNE.grip0*clamp(1-0.35*(tailLen-TUNE.startLen)/880,TUNE.gripFloor,1);
+  delta=wrapPi(theta-phi);
+  phi=phi+delta*(1-Math.exp(-grip*dt));
+  const d2=wrapPi(theta-phi);
+  if(Math.abs(d2)>TUNE.slipCap) phi=theta-Math.sign(d2)*TUNE.slipCap;
+  phi=wrapPi(phi);
+
+  // 3. one number drives scratches, spray, skid, the nose, the bite
+  driftFrac=clamp(Math.abs(delta)/TUNE.driftRef,0,1);
+
+  // 4. speed swells, never steps; carving costs, never brakes
+  let sT=demoMode?240:Math.min(TUNE.speed0+TUNE.speedPer*pelletsEaten+TUNE.timeRamp*runT,TUNE.speedCap);
+  if(spawnT<TUNE.spawnRamp){
+    spawnT+=dt;
+    const f=clamp(spawnT/TUNE.spawnRamp,0,1);
+    sT*=1-(1-f)*(1-f);
+  }
+  const sScrub=sT*(1-TUNE.scrubMax*driftFrac*driftFrac);
+  speed+=(sScrub-speed)*(1-Math.exp(-8*dt));
+
+  // 5. move; lay scratches; feed the trail
+  const ox=px, oy=py;
+  px+=speed*Math.cos(phi)*dt; py+=speed*Math.sin(phi)*dt;
+  travel+=speed*dt;
+  layScratch(ox,oy,px,py);
+  if(travel-lastSample>=TUNE.trailDs){
+    lastSample=travel;
+    const i=tHead&(CAP-1);
+    trailX[i]=px; trailY[i]=py; trailD[i]=travel; tHead++;
+    if(tHead-tTail>CAP) tTail=tHead-CAP;
+  }
+  while(tTail<tHead-1 && travel-trailD[tTail&(CAP-1)]>tailLen+40) tTail++;
+
+  // spray off the slip side
+  if(!demoMode && Math.abs(delta)>=TUNE.sprayMin){
+    sprayDebt+=90*driftFrac*(REDUCED?0.3:1)*dt;
+    while(sprayDebt>=1){
+      sprayDebt--;
+      const s=-Math.sign(delta), pxv=-Math.sin(phi)*s, pyv=Math.cos(phi)*s;
+      const v=60+Math.random()*80;
+      spawnP(0,px,py,
+        pxv*v+speed*0.3*Math.cos(phi), pyv*v+speed*0.3*Math.sin(phi),
+        0.35+Math.random()*0.25, 1+Math.random()*1.2);
+    }
+  }
+
+  // 6. collide: wall, then self, then pellets
+  if(!demoMode && resizeGrace<=0){
+    const walled=rinkSDF(px,py)>-TUNE.wallKill;
+    const ti=tailHitIndex();
+    if(graceRearm){                        // re-arm only once actually clear
+      if(walled||ti>=0) resizeGrace=0.25;
+      else graceRearm=false;
+    } else if(walled){
+      const e=nearestEdge(px,py); die(e.x,e.y); return;
+    } else if(ti>=0){
+      die(trailX[ti],trailY[ti]); return;
+    }
+  }
+  for(let n=pellets.length-1;n>=0;n--){
+    const p=pellets[n], dx=px-p.x, dy=py-p.y;
+    if(dx*dx+dy*dy<TUNE.pickupR*TUNE.pickupR){
+      pellets.splice(n,1);
+      if(demoMode){ pellets.push(spawnPellet()); continue; }
+      eat(p);
+    }
+  }
+
+  // 7. bergs: the rink itself starts pushing back
+  if(!demoMode && TUNE.bergs && TUNE.bergMax>0 && state==='play'){
+    if(runT>=nextBergAt){
+      if(bergs.length<TUNE.bergMax) spawnBerg();
+      nextBergAt=runT+TUNE.bergEvery;
+    }
+    for(const b of bergs){
+      if(b.t<1.2){ b.t+=dt; continue; }            // telegraphed: rising is harmless
+      const dx=px-b.x, dy=py-b.y, rr=b.r+TUNE.wallKill;
+      if(dx*dx+dy*dy<rr*rr && resizeGrace<=0 && !graceRearm){
+        const m=Math.hypot(dx,dy)||1;
+        die(b.x+dx/m*b.r, b.y+dy/m*b.r); return;
+      }
+    }
+  }
+}
+
+function tailHitIndex(){
+  const kill2=TUNE.tailKill*TUNE.tailKill;
+  for(let k=tHead-1;k>=tTail;k--){
+    const i=k&(CAP-1), arc=travel-trailD[i];
+    if(arc<TUNE.neckImmunity) continue;
+    if(arc>tailLen) break;
+    const dx=px-trailX[i], dy=py-trailY[i];
+    if(dx*dx+dy*dy<kill2) return i;
+  }
+  return -1;
+}
+
+function eat(p){
+  const bite=Math.abs(delta)>=TUNE.biteMin;
+  score+=10*chain;
+  spawnPopup(p.x,p.y,'+'+(10*chain));
+  const hadChain=chain>=2;
+  if(bite){ chain=Math.min(chain+1,TUNE.chainCap); sEat(chain,true); }
+  else { if(hadChain) sChainBroken(); else sEat(1,false); chain=1; }
+  runLongestChain=Math.max(runLongestChain,chain);
+  pelletsEaten++; tailLen=TUNE.startLen+TUNE.growPer*pelletsEaten;
+  if(!bestPassed && best>0 && score>best){ bestPassed=true; sBestTick(); }
+  pellets.push(spawnPellet());
+  hudScore(); hudChain(); hudBest();
+}
+
+/* the drift angle, written on the ice */
+function layScratch(x0,y0,x1,y1){
+  const a=0.05+0.30*driftFrac*driftFrac;
+  sctx.strokeStyle='rgba(168,230,255,'+a.toFixed(3)+')';
+  sctx.lineWidth=1.5*scratchScale;
+  const s=scratchScale;
+  if(Math.abs(delta)>=TUNE.biteMin){          // skate edges biting: two lines
+    const oxv=-Math.sin(phi)*2.2, oyv=Math.cos(phi)*2.2;
+    sctx.beginPath();
+    sctx.moveTo((x0+oxv)*s,(y0+oyv)*s); sctx.lineTo((x1+oxv)*s,(y1+oyv)*s);
+    sctx.moveTo((x0-oxv)*s,(y0-oyv)*s); sctx.lineTo((x1-oxv)*s,(y1-oyv)*s);
+    sctx.stroke();
+  } else {
+    sctx.beginPath(); sctx.moveTo(x0*s,y0*s); sctx.lineTo(x1*s,y1*s); sctx.stroke();
+  }
+}
+
+/* ============================================================
+   render
+   ============================================================ */
+let bodyPts=new Float32Array(2800);
+function draw(now){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle='#050912'; ctx.fillRect(0,0,W,H);
+
+  let shx=0, shy=0;
+  if(shakeT<0.5 && !REDUCED){
+    const amp=8*Math.exp(-12*shakeT)*scale;
+    shx=(Math.random()*2-1)*amp; shy=(Math.random()*2-1)*amp;
+  }
+  ctx.setTransform(DPR*scale,0,0,DPR*scale,DPR*(offX+shx),DPR*(offY+shy));
+
+  const dimWorld=(state==='title');
+  ctx.drawImage(rinkLayer,0,0,LW,LH);
+  if(dimWorld) ctx.globalAlpha=0.4;
+  ctx.drawImage(scratch,0,0,LW,LH);
+
+  // the world tells you where you are about to die
+  if(state==='play'){
+    const d=-rinkSDF(px,py);
+    if(d<TUNE.edgeWarnD){
+      const e=nearestEdge(px,py);
+      const a=0.35+0.55*(1-d/TUNE.edgeWarnD);
+      ctx.save();
+      ctx.beginPath(); ctx.arc(e.x,e.y,60,0,7); ctx.clip();
+      pathRink(ctx); ctx.strokeStyle='rgba(168,230,255,'+a.toFixed(3)+')';
+      ctx.lineWidth=2.5/scale; ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // bergs: raised slabs of ice — unmistakable once solid, ghostly while rising
+  for(const b of bergs){
+    const f=Math.min(1,b.t/1.2), rr=b.r*(0.4+0.6*f);
+    const solid=f>=1, baseA=dimWorld?0.4:1;
+    ctx.globalCompositeOperation='lighter';            // cold halo lifts it off the rink
+    ctx.globalAlpha=baseA*(solid?0.30:0.22*f);
+    const gl=rr*4.2;
+    ctx.drawImage(glowGlacier,b.x-gl/2,b.y-gl/2,gl,gl);
+    ctx.globalCompositeOperation='source-over';
+    ctx.globalAlpha=baseA*(solid?1:0.35+0.5*f);
+    ctx.fillStyle=solid?'#1a3049':'#12233a';
+    ctx.beginPath(); ctx.arc(b.x,b.y,rr,0,7); ctx.fill();
+    ctx.strokeStyle='rgba(168,230,255,'+(solid?0.95:(0.5+0.3*f).toFixed(2))+')';
+    ctx.lineWidth=solid?2.5:1.5;
+    ctx.beginPath(); ctx.arc(b.x,b.y,rr,0,7); ctx.stroke();
+    if(solid){
+      ctx.fillStyle='rgba(168,230,255,.10)';           // inner sheen
+      ctx.beginPath(); ctx.arc(b.x-rr*0.15,b.y-rr*0.18,rr*0.55,0,7); ctx.fill();
+      ctx.strokeStyle='rgba(244,251,255,.5)';          // lit facet
+      ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(b.x,b.y,rr-4,-2.5,-1.1); ctx.stroke();
+    }
+  }
+  ctx.globalAlpha=dimWorld?0.4:1;
+
+  // pellets: the only warm things on the ice
+  const tSec=now/1000;
+  for(const p of pellets){
+    const pulse=1+0.15*Math.sin(tSec*5.236+p.phase);
+    ctx.globalCompositeOperation='lighter';
+    ctx.globalAlpha=(dimWorld?0.4:0.9);
+    const g=36*pulse;
+    ctx.drawImage(glowEmber,p.x-g/2,p.y-g/2,g,g);
+    ctx.globalCompositeOperation='source-over';
+    ctx.globalAlpha=dimWorld?0.4:1;
+    ctx.fillStyle='#ffd9a0';
+    ctx.beginPath(); ctx.arc(p.x,p.y,TUNE.pelletR*0.9*pulse,0,7); ctx.fill();
+  }
+  ctx.globalAlpha=dimWorld?0.4:1;
+
+  // body
+  if(state==='play'||state==='title'||state==='dying') drawBody();
+
+  // particles
+  for(const p of pool){
+    if(p.life<=0) continue;
+    const f=p.life/p.max;
+    ctx.globalAlpha=(dimWorld?0.4:1)*f*0.9;
+    ctx.fillStyle=p.col;
+    ctx.fillRect(p.x-p.sz/2,p.y-p.sz/2,p.sz,p.sz);
+  }
+  ctx.globalAlpha=1;
+
+  // popups
+  ctx.textAlign='center'; ctx.font='11px ui-monospace,Menlo,monospace';
+  for(const p of popups){
+    if(p.t>=p.max) continue;
+    const f=p.t/p.max;
+    ctx.globalAlpha=1-f;
+    ctx.fillStyle='#dfeef6';
+    ctx.fillText(p.txt,p.x,p.y-20*f);
+  }
+  ctx.globalAlpha=1;
+
+  // death confirmations: flash + ring at the exact contact point
+  if(state==='dying'||state==='dead'){
+    if(deathT<0.06){
+      ctx.globalAlpha=1-deathT/0.06;
+      ctx.fillStyle='#ffffff';
+      ctx.beginPath(); ctx.arc(px,py,10,0,7); ctx.fill();
+    }
+    if(deathT<0.45){
+      ctx.globalAlpha=(1-deathT/0.45)*0.8;
+      ctx.strokeStyle='#a8e6ff'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(deathPt.x,deathPt.y,1.5+260*deathT,0,7); ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+  }
+}
+
+function drawBody(){
+  // collect head -> tail points, clipped by the shatter frontier when dying
+  let visLen=tailLen;
+  if(state==='dying'){
+    const t=deathT-HITSTOP;
+    visLen=deathTrailLen*(1-clamp(t/0.12,0,1));
+    if(visLen<=1) return;
+  }
+  let n=0;
+  bodyPts[n++]=px; bodyPts[n++]=py;
+  for(let k=tHead-1;k>=tTail && n<bodyPts.length-2;k--){
+    const i=k&(CAP-1), arc=travel-trailD[i];
+    if(arc>visLen){
+      const j=(k+1<tHead)?((k+1)&(CAP-1)):i;
+      const arcJ=travel-trailD[j];
+      const f=(visLen-arcJ)/Math.max(1e-4,arc-arcJ);
+      bodyPts[n++]=trailX[j]+(trailX[i]-trailX[j])*f;
+      bodyPts[n++]=trailY[j]+(trailY[i]-trailY[j])*f;
+      break;
+    }
+    bodyPts[n++]=trailX[i]; bodyPts[n++]=trailY[i];
+  }
+  const pts=n/2;
+  if(pts>=2){
+    const dim=(state==='title');             // demo dims by pre-blend, not alpha
+    if(dim) ctx.globalAlpha=1;
+    const chunks=Math.min(24,Math.max(1,Math.floor(pts/3)));
+    const per=Math.max(1,Math.ceil((pts-1)/chunks));
+    ctx.lineCap='round'; ctx.lineJoin='round';
+    for(let cnk=chunks-1;cnk>=0;cnk--){
+      const a=cnk*per, b=Math.min(pts-1,a+per);
+      if(a>=pts-1) continue;
+      const mid=(a+b)/2/Math.max(1,pts-1);
+      const w=TUNE.headW*(0.35+0.65*Math.pow(1-mid,0.7));
+      // opaque lerp toward 85%-glacier-over-rink — alpha strokes bead at the caps
+      let cr=Math.round(244+(144-244)*mid), cg=Math.round(251+(199-251)*mid),
+          cb=Math.round(255+(222-255)*mid);
+      if(dim){ cr=Math.round(10+(cr-10)*0.4); cg=Math.round(21+(cg-21)*0.4); cb=Math.round(34+(cb-34)*0.4); }
+      ctx.strokeStyle='rgb('+cr+','+cg+','+cb+')';
+      ctx.lineWidth=w;
+      ctx.beginPath();
+      ctx.moveTo(bodyPts[a*2],bodyPts[a*2+1]);
+      for(let q=a+1;q<=b;q++) ctx.lineTo(bodyPts[q*2],bodyPts[q*2+1]);
+      ctx.stroke();
+    }
+  }
+  if(state==='dying') return;
+  if(state==='title') ctx.globalAlpha=0.4;
+  // the nose tick: the kink between tick and neck IS the drift angle
+  const armed=Math.abs(delta)>=TUNE.biteMin;
+  ctx.strokeStyle=armed?'#ffb454':'#f4fbff';
+  ctx.lineWidth=2.2; ctx.lineCap='round';
+  ctx.beginPath();
+  ctx.moveTo(px,py);
+  ctx.lineTo(px+Math.cos(theta)*8.5,py+Math.sin(theta)*8.5);
+  ctx.stroke();
+  if(driftFrac>0.6){
+    ctx.globalCompositeOperation='lighter';
+    ctx.globalAlpha=(driftFrac-0.6)/0.4*(state==='title'?0.2:0.5);
+    ctx.drawImage(glowGlacier,px-14,py-14,28,28);
+    ctx.globalCompositeOperation='source-over';
+    ctx.globalAlpha=state==='title'?0.4:1;
+  }
+}
+
+/* ============================================================
+   HUD
+   ============================================================ */
+function hudScore(){ $('scorelbl').textContent=score; }
+function hudBest(){
+  $('bestlbl').textContent=bestPassed?score:best;
+  $('bestlbl').classList.toggle('dim',!bestPassed);
+}
+function hudChain(){
+  const el=$('chainlbl');
+  if(chain>=2){
+    el.textContent='x'+chain;
+    el.classList.remove('hidden');
+    el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse');
+  } else el.classList.add('hidden');
+}
+
+/* ============================================================
+   tuning drawer — open drift.html?tune and turn knobs live.
+   values persist on this machine (drift.tune) and apply even
+   when the drawer is closed; RESET returns to factory.
+   ============================================================ */
+const TUNABLE={
+  grip0:       {l:'grip',            g:'ice feel', min:2,   max:10,  step:0.1},
+  gripFloor:   {l:'grip floor',      g:'ice feel', min:0.3, max:1,   step:0.05},
+  turnRate:    {l:'turn rate',       g:'ice feel', min:2,   max:5,   step:0.1},
+  biteMin:     {l:'drift gate deg',  g:'ice feel', min:10,  max:35,  step:1, mul:Math.PI/180},
+  scrubMax:    {l:'carve cost %',    g:'ice feel', min:0,   max:40,  step:1, mul:0.01},
+  speed0:      {l:'base speed',      g:'speed',    min:120, max:350, step:5},
+  speedPer:    {l:'speed / pellet',  g:'speed',    min:0,   max:15,  step:1},
+  timeRamp:    {l:'speed / 10s',     g:'speed',    min:0,   max:20,  step:1, mul:0.1},
+  speedCap:    {l:'speed cap',       g:'speed',    min:250, max:600, step:10},
+  pickupR:     {l:'pickup radius',   g:'fairness', min:10,  max:35,  step:1},
+  wallKill:    {l:'wall kill zone',  g:'fairness', min:1,   max:8,   step:0.5},
+  tailKill:    {l:'tail kill radius',g:'fairness', min:4,   max:12,  step:0.5},
+  neckImmunity:{l:'neck immunity',   g:'fairness', min:12,  max:40,  step:1},
+  growPer:     {l:'growth / pellet', g:'growth',   min:10,  max:60,  step:2},
+  startLen:    {l:'start length',    g:'growth',   min:60,  max:300, step:10},
+  bergFirst:   {l:'first berg (s)',  g:'bergs',    min:5,   max:120, step:5},
+  bergEvery:   {l:'berg every (s)',  g:'bergs',    min:5,   max:60,  step:5},
+  bergMax:     {l:'max bergs',       g:'bergs',    min:0,   max:12,  step:1},
+  bergR:       {l:'berg radius',     g:'bergs',    min:8,   max:30,  step:1},
+};
+const FACTORY={bergs:TUNE.bergs};
+for(const k in TUNABLE) FACTORY[k]=TUNE[k];
+try{
+  const saved=JSON.parse(store.get('drift.tune','null'));
+  if(saved) for(const k in saved)
+    if((k in TUNABLE || k==='bergs') && typeof saved[k]==='number') TUNE[k]=saved[k];
+}catch(e){}
+function saveTune(){
+  const o={bergs:TUNE.bergs};
+  for(const k in TUNABLE) o[k]=TUNE[k];
+  store.set('drift.tune',JSON.stringify(o));
+}
+const fmt=(v,st)=> st>=1?String(Math.round(v)):(st>=0.1?v.toFixed(1):v.toFixed(2));
+if(/[?&]tune\b/.test(location.search)){
+  document.body.classList.add('tune');
+  const T=document.createElement('div'); T.id='tuner';
+  let h='<h2>TUNE</h2><div class="note">turn knobs mid-run - it applies instantly.<br>saved on this mac until reset.</div>';
+  let lastGrp='';
+  for(const k in TUNABLE){
+    const s=TUNABLE[k];
+    if(s.g!==lastGrp){
+      lastGrp=s.g;
+      h+='<div class="grp">'+s.g+'</div>';
+      if(s.g==='bergs')
+        h+='<div class="chk"><span>bergs on</span><input type="checkbox" id="tn_bergs"'+(TUNE.bergs?' checked':'')+'></div>';
+    }
+    const v=TUNE[k]/(s.mul||1);
+    h+='<div class="row"><label>'+s.l+' <i id="tv_'+k+'">'+fmt(v,s.step)+'</i></label>'
+      +'<input type="range" id="tn_'+k+'" min="'+s.min+'" max="'+s.max+'" step="'+s.step+'" value="'+v+'"></div>';
+  }
+  h+='<div class="btns"><button id="tb_restart">restart</button><button id="tb_reset">reset</button><button id="tb_copy">copy</button></div>';
+  T.innerHTML=h;
+  document.body.appendChild(T);
+  const syncTuner=()=>{
+    for(const k in TUNABLE){
+      const s=TUNABLE[k], v=TUNE[k]/(s.mul||1);
+      $('tn_'+k).value=v; $('tv_'+k).textContent=fmt(v,s.step);
+    }
+    $('tn_bergs').checked=!!TUNE.bergs;
+  };
+  for(const k in TUNABLE){
+    const inp=$('tn_'+k), s=TUNABLE[k];
+    inp.addEventListener('input',()=>{
+      const v=parseFloat(inp.value);
+      TUNE[k]=v*(s.mul||1);
+      $('tv_'+k).textContent=fmt(v,s.step);
+      saveTune();
+    });
+    inp.addEventListener('pointerup',()=>inp.blur());
+  }
+  $('tn_bergs').addEventListener('change',e=>{ TUNE.bergs=e.target.checked?1:0; saveTune(); });
+  $('tb_restart').addEventListener('click',()=>{ startRun(state==='title'); });
+  $('tb_reset').addEventListener('click',()=>{
+    for(const k in FACTORY) TUNE[k]=FACTORY[k];
+    try{ localStorage.removeItem('drift.tune'); }catch(e){}
+    syncTuner();
+  });
+  $('tb_copy').addEventListener('click',()=>{
+    const o={bergs:TUNE.bergs}; for(const k in TUNABLE) o[k]=TUNE[k];
+    const j=JSON.stringify(o,null,2), btn=$('tb_copy');
+    const done=()=>{ btn.textContent='copied'; setTimeout(()=>btn.textContent='copy',1200); };
+    if(navigator.clipboard) navigator.clipboard.writeText(j).then(done,()=>window.prompt('copy these values:',j));
+    else window.prompt('copy these values:',j);
+  });
+}
+
+/* ============================================================
+   boot — the attract demo is the tutorial
+   ============================================================ */
+addEventListener('resize',onResize);
+resize();
+spawnPlayer();
+tailLen=260;                       // demo snake: alive-looking, never saturates
+resetPellets(false);
+updateChev();
+$('bestlbl').textContent=best;
+
+let last=performance.now(), acc=0, resurfAcc=0;
+function loop(now){
+  requestAnimationFrame(loop);
+  let dt=(now-last)/1000; last=now;
+  if(dt>TUNE.jankGuard){                       // a GC spike must never kill you
+    if(state==='play'&&!paused){ paused=true; frozenUI(); }
+    dt=0;
+  }
+
+  if(state==='play'||state==='title'){
+    if(!paused){
+      if(resizeGrace>0) resizeGrace-=dt;       // grace measures lived gameplay
+      acc=Math.min(acc+dt,TUNE.maxSteps*TUNE.simDt+0.001);
+      let steps=0;
+      while(acc>=TUNE.simDt && steps<TUNE.maxSteps && (state==='play'||state==='title')){
+        step(TUNE.simDt); acc-=TUNE.simDt; steps++;
+      }
+      resurfAcc+=dt;                            // the ice slowly heals (t½ ≈ 45 s)
+      if(resurfAcc>=0.5){
+        resurfAcc=0;
+        sctx.globalCompositeOperation='destination-in';
+        sctx.fillStyle='rgba(0,0,0,0.9923)';
+        sctx.fillRect(0,0,scratch.width,scratch.height);
+        sctx.globalCompositeOperation='source-over';
+      }
+    }
+  } else if(state==='dying'){
+    deathT+=dt;
+    if(deathT>=HITSTOP) shatterStep(dt);
+    if(deathT>=TUNE.overlayAt) presentDeath();
+  } else if(state==='dead'){
+    deathT+=dt;
+  }
+  if(shakeT<9) shakeT+=dt;
+
+  // particles & popups run on world time (slow-mo through the shatter)
+  let wdt=dt;
+  if(paused&&state==='play') wdt=0;            // FROZEN freezes everything
+  else if(state==='dying'&&deathT<HITSTOP) wdt=0;
+  else if(state==='dying'&&deathT<TUNE.slowmoEnd&&!REDUCED) wdt=dt*TUNE.slowmo;
+  for(const p of pool){
+    if(p.life<=0) continue;
+    p.life-=wdt; p.x+=p.vx*wdt; p.y+=p.vy*wdt;
+    p.vx*=Math.exp(-1.2*wdt); p.vy*=Math.exp(-1.2*wdt);
+  }
+  for(const p of popups) if(p.t<p.max) p.t+=wdt;
+
+  if(state==='play'&&firstRun&&runT<3.2) updateChev();
+  audioFrame();
+  draw(now);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
