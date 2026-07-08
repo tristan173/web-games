@@ -409,6 +409,7 @@ addEventListener('pointerup', () => {
   const quick = performance.now() - pointer.t < 230 && pointer.moved < 12;
   if (state === 'title')      startRun();
   else if (state === 'over')  startRun();
+  else if (state === 'play' && paused) paused = false;  // a tap wakes it back up (mobile has no P key)
   else if (state === 'clear' && quick) skipBanner();   // a hold-release arriving at the gate isn't a skip
   else if (state === 'play' && !paused && quick) firePing();
 });
@@ -421,7 +422,10 @@ document.getElementById('pingbtn').addEventListener('pointerdown', e => {
   else if (state==='play' && !paused) firePing();
 });
 addEventListener('contextmenu', e => e.preventDefault());
-document.addEventListener('visibilitychange', () => { if (document.hidden && state==='play') paused = true; });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden){ if (state==='play') paused = true; }
+  else if (AC && AC.state !== 'running') AC.resume();   // wake audio when the app returns
+});
 
 function toggleMute(){
   muted = !muted;
@@ -697,7 +701,9 @@ function draw(){
     ctx.fillStyle = 'rgba(5,9,18,0.55)'; ctx.fillRect(0,0,W,H);
     ctx.fillStyle = '#dfeef6'; ctx.font = '200 22px ui-monospace, monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('P A U S E D', W/2, H/2);
+    ctx.fillText('P A U S E D', W/2, H/2 - 12);
+    ctx.fillStyle = '#7fe3ff'; ctx.font = '11px ui-monospace, monospace';
+    ctx.fillText('tap to resume', W/2, H/2 + 18);
   }
 }
 
@@ -744,6 +750,7 @@ function resize(){
   DPR = Math.min(2, window.devicePixelRatio || 1);
   W = innerWidth; H = innerHeight;
   cvs.width = W * DPR; cvs.height = H * DPR;
+  cvs.style.width = W + 'px'; cvs.style.height = H + 'px';   // fill the viewport at any DPR
   // pre-render vignette
   vignette = document.createElement('canvas');
   vignette.width = W; vignette.height = H;
