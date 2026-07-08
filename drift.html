@@ -285,10 +285,13 @@ function resizeNow(){
   W=innerWidth; H=innerHeight;
   cvs.width=W*DPR; cvs.height=H*DPR;
   const mn=Math.min(W,H), mx=Math.max(W,H);
+  // phones get a tighter, more zoomed-in rink so the snake is thumb-scale, not a
+  // speck in a vast field; desktop keeps the full 640u world.
+  const base=mn<=560?460:TUNE.base;
   const oldLW=LW, oldLH=LH;
-  const long=TUNE.base*clamp(mx/mn,1,TUNE.aspectMax);
-  if(W>=H){ LW=long; LH=TUNE.base; } else { LW=TUNE.base; LH=long; }
-  scale=mn/TUNE.base;
+  const long=base*clamp(mx/mn,1,TUNE.aspectMax);
+  if(W>=H){ LW=long; LH=base; } else { LW=base; LH=long; }
+  scale=mn/base;
   offX=(W-LW*scale)/2; offY=(H-LH*scale)/2;
   if(oldLW && (oldLW!==LW||oldLH!==LH)){
     rescaleWorld(oldLW,oldLH);
