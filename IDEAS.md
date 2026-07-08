@@ -29,6 +29,7 @@ House style (set by Ping): near-black blue field, one cold accent + one warm acc
 | 19 | **Minesweeper-roguelike** | Monsters with visible attack numbers ("the banker") | idea |
 | 20 | **Falling-sand** | Sandbox toy with daily "build this" goals | idea |
 | 21 | **Eyeball the Regression** | Draw the trend line by hand, score vs. least squares | idea |
+| 22 | **Mate in 4** | Daily mate-in-1..4 chess puzzles; N tries for mate-in-N; Wordle-style streaks & share | ✅ built (Claude Code, panel-reviewed) — `matein4.html` |
 
 ## Podiums
 
