@@ -16,11 +16,11 @@ House style (set by Ping): near-black blue field, one cold accent + one warm acc
 | 6 | **Fermi** | Daily order-of-magnitude estimation, Wordle-style | idea |
 | 7 | **Topiary** | Prune an L-system tree to match a silhouette | idea |
 | 8 | **Herd** | You're the dog, the sheep are boids | idea |
-| 9 | **Orbit Putt** | Golf through gravity wells | idea |
+| 9 | **Orbit Putt** | Daily cosmic golf — slingshot through gravity wells, shareable scorecard | 🔨 first cut (feel-tuning) — `orbitputt.html` |
 | 10 | **Drift** | Snake on ice — momentum, no brakes | ✅ built (Claude Code, panel-reviewed) — `drift.html` |
 | 11 | **Signal** | You only control the traffic lights | idea |
 | 12 | **One Line** | Draw one stroke that becomes solid | idea |
-| 13 | **Ricochet** | One bullet, N bounces, every target | idea |
+| 13 | **Ricochet** | One bullet, N bounces, clear every mark; obstacles, clean-streak, daily+share | ✅ deluxe built (Claude Code, panel + review) — `ricochet.html` |
 | 14 | **Equilibrium** | Keep a Lotka–Volterra ecosystem alive with two sliders | idea |
 | 15 | **Pheromone** | Paint evaporating ant trails | idea |
 | 16 | **Nudge** | Tower defense by adjusting planetary orbits | idea |
