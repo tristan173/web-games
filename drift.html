@@ -284,6 +284,7 @@ function resizeNow(){
   DPR=Math.min(2,window.devicePixelRatio||1);
   W=innerWidth; H=innerHeight;
   cvs.width=W*DPR; cvs.height=H*DPR;
+  cvs.style.width=W+'px'; cvs.style.height=H+'px';   // fill the viewport at any DPR (retina)
   const mn=Math.min(W,H), mx=Math.max(W,H);
   // phones get a tighter, more zoomed-in rink so the snake is thumb-scale, not a
   // speck in a vast field; desktop keeps the full 640u world.
