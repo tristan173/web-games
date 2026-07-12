@@ -30,6 +30,11 @@ House style (set by Ping): near-black blue field, one cold accent + one warm acc
 | 20 | **Falling-sand** | Sandbox toy with daily "build this" goals | idea |
 | 21 | **Eyeball the Regression** | Draw the trend line by hand, score vs. least squares | idea |
 | 22 | **Mate in 4** | Daily mate-in-1..4 chess puzzles; N tries for mate-in-N; Wordle-style streaks & share | ✅ built (Claude Code, panel-reviewed) — `matein4.html` |
+| 23 | **Ration** | Daily word: clued answers fight over one exact bank of letter tiles — wrong-but-plausible answers bankrupt a later clue | 📐 spec — `specs/ration.md` |
+| 24 | **Misquote** | Daily word: two famous quotes tangled together; swap words (not letters) until both read true | 📐 spec — `specs/misquote.md` |
+| 25 | **Stowaway** | Daily word: five sentences each smuggle a themed word across word boundaries ("map led" → MAPLE) | 📐 spec — `specs/stowaway.md` |
+
+23–25 are the daily word-game lane (gift-first for Tristan's wife, portal-compatible). Shared chassis — daily rollover, streaks, share, URL-hash gift links — spec'd once in `specs/daily-kit.md`. Mechanics researched 2026-07-12 against the field (NYT, LinkedIn Wend, Puzzmo, Merriam-Webster's Twofer Goofer, Shrinkle, Waffle/Swapdle et al.) — all three occupy verified gaps.
 
 ## Podiums
 
