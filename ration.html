@@ -49,6 +49,9 @@
   .cta{background:var(--warm); color:#160c04; border:none; font:inherit; font-weight:700;
     letter-spacing:.2em; font-size:15px; padding:14px 30px; border-radius:11px; cursor:pointer}
   .cta:active{transform:translateY(1px)}
+  #title .hardbtn{margin-top:14px; background:none; color:var(--cold); border:1.5px solid var(--cold-dk);
+    font:inherit; font-weight:700; letter-spacing:.14em; font-size:13px; padding:11px 22px; border-radius:10px; cursor:pointer}
+  #title .hardbtn:active{transform:translateY(1px)}
   #title .sub{margin-top:14px; font-size:11px; color:var(--faint)}
 
   /* ---- board ---- */
@@ -159,9 +162,10 @@
     <div class="rule">
       No hints. No colours. Fill every slot, then submit the whole board at once.<br>
       Right words lock. Wrong words hand their letters back.<br>
-      <em>You get four submissions.</em>
+      <em>Take as many tries as you need.</em>
     </div>
     <button class="cta" id="playbtn">PLAY TODAY</button>
+    <button class="hardbtn" id="hardbtn">TRY A HARD ONE →</button>
     <div class="sub" id="titlesub"></div>
   </section>
 
@@ -202,9 +206,11 @@
 
 <script>
 "use strict";
-const BUILD = "r2";
+const BUILD = "r3";
 const DATA_B64 = "W3siaWQiOiJtb24tMDEiLCJkYXkiOiJNb24iLCJjbHVlcyI6W3siYyI6IkhlYWQgY292ZXJpbmciLCJhIjoiQ0FQIiwiZGVjb3lzIjpbIkhBVCJdfSx7ImMiOiJCZWFjaCBzaGVsdGVyIiwiYSI6IkhVVCIsImRlY295cyI6W119LHsiYyI6IlNoYWRlLWxvdmluZyBmcm9uZCBwbGFudCIsImEiOiJGRVJOIiwiZGVjb3lzIjpbXX0seyJjIjoiRW1iZXJzJyBzb2Z0IGxpZ2h0IiwiYSI6IkdMT1ciLCJkZWNveXMiOltdfV0sIm5vdGUiOiJrZXlzdG9uZTogSEFUIGFsc28gZml0cyAnaGVhZCBjb3ZlcmluZycgYnV0IHN0ZWFscyB0aGUgSCtUIHRoYXQgSFVUIG5lZWRzIn0seyJpZCI6Im1vbi0wMiIsImRheSI6Ik1vbiIsImNsdWVzIjpbeyJjIjoiRmxvb3IgY292ZXJpbmciLCJhIjoiTUFUIiwiZGVjb3lzIjpbIlJVRyJdfSx7ImMiOiJXaWxkZWJlZXN0IiwiYSI6IkdOVSIsImRlY295cyI6W119LHsiYyI6IkFjdG9yJ3MgcGFydCIsImEiOiJST0xFIiwiZGVjb3lzIjpbXX0seyJjIjoiQ29ybiBvbiB0aGUgX19fIiwiYSI6IkNPQiIsImRlY295cyI6W119XSwibm90ZSI6ImtleXN0b25lOiBSVUcgZml0cyAnZmxvb3IgY292ZXJpbmcnIGJ1dCBzdGVhbHMgdGhlIFIrVStHIHRoYXQgR05VL1JPTEUgbmVlZCJ9LHsiaWQiOiJ0dWUtMDEiLCJkYXkiOiJUdWUiLCJjbHVlcyI6W3siYyI6IlVudHJ1dGgiLCJhIjoiRklCIiwiZGVjb3lzIjpbIkxJRSJdfSx7ImMiOiJNaXNwbGFjZSIsImEiOiJMT1NFIiwiZGVjb3lzIjpbXX0seyJjIjoiRnJvemVuIHNwaWtlIiwiYSI6IklDRSIsImRlY295cyI6W119LHsiYyI6IkFwcGxhdWQiLCJhIjoiQ0xBUCIsImRlY295cyI6W119XSwibm90ZSI6ImtleXN0b25lOiBMSUUgZml0cyAndW50cnV0aCcgYnV0IHN0ZWFscyB0aGUgTCtJK0UgdGhhdCBMT1NFL0lDRSBuZWVkIn0seyJpZCI6IndlZC0wMSIsImRheSI6IldlZCIsImNsdWVzIjpbeyJjIjoiQ29va3dhcmUiLCJhIjoiUEFOIiwiZGVjb3lzIjpbIlBPVCJdfSx7ImMiOiJTcGlubmluZyB0b3kiLCJhIjoiVE9QIiwiZGVjb3lzIjpbXX0seyJjIjoiSGV4IG9yIGN1cnNlIiwiYSI6IkpJTlgiLCJkZWNveXMiOltdfSx7ImMiOiJTbWVhciBvciBzbXVkZ2UiLCJhIjoiQkxVUiIsImRlY295cyI6W119LHsiYyI6IlNoYWRlLWxvdmluZyBwbGFudCIsImEiOiJGRVJOIiwiZGVjb3lzIjpbXX1dLCJub3RlIjoia2V5c3RvbmU6IFBPVCAoYW5hZ3JhbSBvZiBUT1ApIGZpdHMgJ2Nvb2t3YXJlJyBhbmQgc3RlYWxzIHRoZSBzY2FyY2UgTytUIHRoYXQgVE9QIG5lZWRzOyBmaWxsZXJzIGNhcnJ5IG5vIE8vVCJ9LHsiaWQiOiJ0aHUtMDEiLCJkYXkiOiJUaHUiLCJjbHVlcyI6W3siYyI6IkNsb3NlIGZyaWVuZCIsImEiOiJCVUQiLCJkZWNveXMiOlsiUEFMIl19LHsiYyI6IkJlZHNpZGUgbGlnaHQiLCJhIjoiTEFNUCIsImRlY295cyI6W119LHsiYyI6IlBvbmQgYW1waGliaWFuIiwiYSI6IkZST0ciLCJkZWNveXMiOltdfSx7ImMiOiJDYW5kbGUncyBidXJudCBzdHJpbmciLCJhIjoiV0lDSyIsImRlY295cyI6W119XSwibm90ZSI6ImtleXN0b25lOiBQQUwgZml0cyAnY2xvc2UgZnJpZW5kJyBidXQgc3RlYWxzIHRoZSBzY2FyY2UgTCtBK1AgdGhhdCBMQU1QIG5lZWRzIn0seyJpZCI6ImZyaS0wMSIsImRheSI6IkZyaSIsImNsdWVzIjpbeyJjIjoiQ29va3dhcmUiLCJhIjoiUEFOIiwiZGVjb3lzIjpbIlBPVCJdfSx7ImMiOiJTcGlubmluZyB0b3kiLCJhIjoiVE9QIiwiZGVjb3lzIjpbXX0seyJjIjoiSGVhZCBjb3ZlcmluZyIsImEiOiJDQVAiLCJkZWNveXMiOlsiSEFUIl19LHsiYyI6IkJlYWNoIHNoZWx0ZXIiLCJhIjoiSFVUIiwiZGVjb3lzIjpbXX0seyJjIjoiSGV4IG9yIGN1cnNlIiwiYSI6IkpJTlgiLCJkZWNveXMiOltdfSx7ImMiOiJTbWVhciBvciBzbXVkZ2UiLCJhIjoiQkxVUiIsImRlY295cyI6W119XSwibm90ZSI6IlRXTyBzaW11bHRhbmVvdXMgdHJhcHM6IFBPVCBzdGVhbHMgVE9QJ3Mgc2NhcmNlIE8sIEhBVCBzdGVhbHMgSFVUJ3Mgc2NhcmNlIEgifSx7ImlkIjoic2F0LTAxIiwiZGF5Ijoic2F0IiwiY2x1ZXMiOlt7ImMiOiJIZWFkIGNvdmVyaW5nIiwiYSI6IkNBUCIsImRlY295cyI6WyJIQVQiXX0seyJjIjoiQmVhY2ggc2hlbHRlciIsImEiOiJIVVQiLCJkZWNveXMiOltdfSx7ImMiOiJDb29rd2FyZSIsImEiOiJQQU4iLCJkZWNveXMiOlsiUE9UIl19LHsiYyI6IlNwaW5uaW5nIHRveSIsImEiOiJUT1AiLCJkZWNveXMiOltdfSx7ImMiOiJMaXR0bGUgd2hpdGUgX19fIiwiYSI6IkZJQiIsImRlY295cyI6WyJMSUUiXX0seyJjIjoiNSwyODAgZmVldCIsImEiOiJNSUxFIiwiZGVjb3lzIjpbXX1dLCJub3RlIjoiVEhSRUUgc2ltdWx0YW5lb3VzIHRyYXBzOiBIQVQtPkhVVCwgUE9ULT5UT1AsIExJRS0+TUlMRS4gQWxsIHNjYXJjZS1sZXR0ZXIgdGhlZnRzIn0seyJpZCI6InN1bi0wMSIsImRheSI6IlN1biIsImNsdWVzIjpbeyJjIjoiVGFiYnksIGZhbWlsaWFybHkiLCJhIjoiVE9NIiwiZGVjb3lzIjpbIkNBVCJdfSx7ImMiOiJJZGxlIGNoYXR0ZXIiLCJhIjoiQ0hBVCIsImRlY295cyI6W119LHsiYyI6Ildvb2R3aW5kJ3MgcmVlZCBjb3VzaW4iLCJhIjoiT0JPRSIsImRlY295cyI6W119LHsiYyI6IlByb3dsaW5nIGNhbmluZSIsImEiOiJXT0xGIiwiZGVjb3lzIjpbXX0seyJjIjoiUHJlY2lvdXMgc3RvbmUiLCJhIjoiR0VNIiwiZGVjb3lzIjpbXX1dLCJub3RlIjoidGhlIGNhbm9uaWNhbCBDQVQtPkNIQVQgdHJhcCwgZ2VudGx5OyBzcGljZSBsZXR0ZXJzIChCLFcsRixHKSBrZWVwIGl0IHRpZ2h0In1d";
 const PUZZLES = JSON.parse(decodeURIComponent(escape(atob(DATA_B64))));
+const HARD_B64 = "W3siaWQiOiJoYXJkLTAxIiwiZGF5IjoiSGFyZCIsImNsdWVzIjpbeyJjIjoiQmlyZCIsImEiOiJIQVdLIiwiZGVjb3lzIjpbIldSRU4iLCJLSVdJIiwiUkhFQSJdfSx7ImMiOiJGaXNoIiwiYSI6IkNBUlAiLCJkZWNveXMiOlsiUElLRSIsIkNIQVIiLCJEQUNFIl19LHsiYyI6IlRyZWUiLCJhIjoiUElORSIsImRlY295cyI6WyJQRUFSIl19LHsiYyI6IkdlbXN0b25lIiwiYSI6IkpBREUiLCJkZWNveXMiOltdfSx7ImMiOiJNZXRhbCIsImEiOiJaSU5DIiwiZGVjb3lzIjpbXX1dLCJub3RlIjoiSEFSRDogZXZlcnkgY2x1ZSBpcyBhIHdpZGUgY2F0ZWdvcnk7IG9ubHkgdGhlIHNoYXJlZCBsZXR0ZXJzIHBpY2sgdGhlIHNldCJ9LHsiaWQiOiJoYXJkLTAyIiwiZGF5IjoiSGFyZCIsImNsdWVzIjpbeyJjIjoiQmlyZCIsImEiOiJDUk9XIiwiZGVjb3lzIjpbIldSRU4iLCJHVUxMIiwiTE9PTiJdfSx7ImMiOiJGaXNoIiwiYSI6IlBJS0UiLCJkZWNveXMiOlsiTElORyJdfSx7ImMiOiJUcmVlIiwiYSI6IlBMVU0iLCJkZWNveXMiOlsiUElORSIsIkxJTUUiXX0seyJjIjoiR2Vtc3RvbmUiLCJhIjoiT05ZWCIsImRlY295cyI6W119LHsiYyI6Ik1ldGFsIiwiYSI6IkdPTEQiLCJkZWNveXMiOlsiSVJPTiJdfV0sIm5vdGUiOiJIQVJEIHZhcmlhbnQifSx7ImlkIjoiaGFyZC0wMyIsImRheSI6IkhhcmQiLCJjbHVlcyI6W3siYyI6IlNwaWNlIiwiYSI6IkNVTUlOIiwiZGVjb3lzIjpbIkFOSVNFIl19LHsiYyI6IkJpZyBjYXQiLCJhIjoiVElHRVIiLCJkZWNveXMiOltdfSx7ImMiOiJQbGFuZXQiLCJhIjoiVkVOVVMiLCJkZWNveXMiOltdfSx7ImMiOiJEYW5jZSIsImEiOiJUQU5HTyIsImRlY295cyI6WyJDT05HQSJdfV0sIm5vdGUiOiJIQVJEOiA1LWxldHRlciBjYXRlZ29yaWVzIn1d";
+const HARD = JSON.parse(decodeURIComponent(escape(atob(HARD_B64))));
 const EPOCH = Date.UTC(2026,6,13);              // Mon 2026-07-13 => index 0
 const UNLIMITED = true;                          // keep trying until solved — no shut-out
 const NSUB = UNLIMITED ? Infinity : 4;           // submission budget
@@ -255,21 +261,34 @@ let active=0;
 let subUsed=0;
 let rows=[];         // share rows: array of arrays of bool(locked)
 let finished=false;
+let isHard=false;    // practice/hard puzzle -> never touches the daily streak
 
 const $=id=>document.getElementById(id);
 const scr=name=>{ document.querySelectorAll(".screen").forEach(s=>s.classList.remove("on")); $(name).classList.add("on"); };
 
-function initPuzzle(dn){
-  P=puzzleForDay(dn);
+function beginBoard(label){
   const letters=[];
   P.clues.forEach(c=>{ for(const ch of c.a) letters.push(ch); });
   letters.sort();
   tiles=letters.map((ch,i)=>({id:i,ch,loc:"bank",cell:-1}));
   slots=P.clues.map(c=>({ans:c.a, cells:Array(c.a.length).fill(null), locked:false}));
   active=0; subUsed=0; rows=[]; finished=false;
-  $("daylabel").textContent = P.day+" · #"+ (((dn%PUZZLES.length)+PUZZLES.length)%PUZZLES.length + 1);
+  $("daylabel").textContent = label;
   renderBoard(); renderBank(); renderPips(); updateSubmit();
   $("prompt").innerHTML="Tap a slot, then tap letters from the pile below.";
+}
+function initPuzzle(dn){
+  isHard=false;
+  P=puzzleForDay(dn);
+  const idx=(((dn%PUZZLES.length)+PUZZLES.length)%PUZZLES.length + 1);
+  beginBoard(P.day+" · #"+idx);
+}
+function startHard(){
+  isHard=true;
+  const n=(parseInt(localStorage.getItem(LS+".hardseen")||"0",10))%HARD.length;
+  localStorage.setItem(LS+".hardseen", String(n+1));
+  P=HARD[n];
+  beginBoard("HARD · category");
 }
 
 /* ---------- rendering ---------- */
@@ -396,6 +415,7 @@ function flashWrongThenSolve(loss){ setTimeout(()=>showSolve(loss), loss?520:640
 /* ---------- solve card ---------- */
 function recordResult(won){
   const dn=currentDayNum();
+  if(isHard) return;                               // hard/practice never touches stats
   if(todayIndexOffset()!==0) return;               // dev time-travel never touches stats
   const key=String(dn);
   if(stats.solved && stats.solved[key]!==undefined) return; // already recorded
@@ -440,16 +460,21 @@ function showSolve(loss){
   // share grid
   $("sharegrid").innerHTML = buildGrid().replace(/\n/g,"<br>");
   // streak line
-  $("streakline").innerHTML = won
-    ? `streak <b>${stats.streak}</b> · best <b>${stats.max}</b>`
-    : `streak reset · best <b>${stats.max||0}</b>`;
+  if(isHard){
+    $("streakline").innerHTML = `practice puzzle · daily streak <b>${stats.streak||0}</b> untouched`;
+  } else {
+    $("streakline").innerHTML = won
+      ? `streak <b>${stats.streak}</b> · best <b>${stats.max}</b>`
+      : `streak reset · best <b>${stats.max||0}</b>`;
+  }
   updateHud();
 }
 function buildGrid(){
   // header + one row per submission: 🟧 locked, ⬛ not-yet
   const idx=((currentDayNum()%PUZZLES.length)+PUZZLES.length)%PUZZLES.length + 1;
-  let out = UNLIMITED ? `RATION #${idx}  ${subUsed} ${subUsed===1?'try':'tries'}\n`
-                      : `RATION #${idx}  ${subUsed}/${NSUB}\n`;
+  const label = isHard ? "RATION · HARD" : `RATION #${idx}`;
+  let out = UNLIMITED ? `${label}  ${subUsed} ${subUsed===1?'try':'tries'}\n`
+                      : `${label}  ${subUsed}/${NSUB}\n`;
   rows.forEach(r=>{ out += r.map(l=> l?"🟧":"⬛").join("")+"\n"; });
   return out.trim();
 }
@@ -495,6 +520,7 @@ function setOff(d){ const cur=todayIndexOffset(); localStorage.setItem(LS+".devo
 
 /* ---------- events ---------- */
 $("playbtn").onclick=()=>{ ac(); initPuzzle(currentDayNum()); scr("board"); renderDev(); };
+$("hardbtn").onclick=()=>{ ac(); startHard(); scr("board"); renderDev(); };
 $("clues").addEventListener("click",e=>{
   const cell=e.target.closest(".cell"); const slot=e.target.closest(".slot");
   if(cell && cell.classList.contains("filled") && !slots[+cell.dataset.si].locked){
